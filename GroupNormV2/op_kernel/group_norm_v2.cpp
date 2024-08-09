@@ -1,6 +1,6 @@
 #include "kernel_operator.h"
 using namespace AscendC;
-constexpr int MAX_GROUP = 8;
+constexpr int MAX_GROUP = 128;
 template<typename T> class BruteForce {
 public:
     __aicore__ inline BruteForce() {}
@@ -19,37 +19,32 @@ public:
         Gm_rstd.SetGlobalBuffer((__gm__ T*)rstd, num_groups);
     }
     __aicore__ inline void Process() {
+        const int length = total_size / batch_size / num_groups;
         float mean[MAX_GROUP] = {};
         for (int index = 0, i = 0; i < batch_size; ++i) {
             for (int j = 0; j < num_groups; ++j) {
-                for (int k = 0; k < total_size / batch_size / num_groups; ++k) {
+                for (int k = 0; k < length; ++k) {
                     T val = Gm_x.GetValue(index++);
-                    mean[j] += (float)val;
+                    mean[i*num_groups+j] += (float)val;
                 }
+                mean[i*num_groups+j] /= length;
             }
-        }
-        for (int j = 0; j < num_groups; ++j) {
-            mean[j] /= total_size / num_groups;
-            Gm_mean.SetValue(j, (T)mean[j]);
         }
         float rstd[MAX_GROUP] = {};
         for (int index = 0, i = 0; i < batch_size; ++i) {
             for (int j = 0; j < num_groups; ++j) {
-                float avg = mean[j];
-                for (int k = 0; k < total_size / batch_size / num_groups; ++k) {
+                float avg = mean[i*num_groups+j];
+                for (int k = 0; k < length; ++k) {
                     float val = Gm_x.GetValue(index++);
-                    rstd[j] += (val - avg) * (val - avg);
+                    rstd[i*num_groups+j] += (val - avg) * (val - avg);
                 }
+                rstd[i*num_groups+j] /= length;
             }
-        }
-        for (int j = 0; j < num_groups; ++j) {
-            rstd[j] /= total_size / num_groups;
-            Gm_rstd.SetValue(j, (T)rstd[j]);
         }
         auto block_size = num_channels / num_groups;
         for (int index = 0, i = 0; i < batch_size; ++i) {
             for (int j = 0; j < num_channels; ++j) {
-                float avg = mean[j / block_size], var = rstd[j / block_size];
+                float avg = mean[i*num_groups+j / block_size], var = rstd[i*num_groups+j / block_size];
                 float gm = Gm_gamma.GetValue(j), bt = Gm_beta.GetValue(j);
                 for (int k = 0; k < total_size / batch_size / num_channels; ++k) {
                     float x = Gm_x.GetValue(index);
