@@ -1,6 +1,5 @@
 #include "kernel_operator.h"
 using namespace AscendC;
-constexpr int MAX_GROUP = 128;
 template<typename T> class BruteForce {
 public:
     __aicore__ inline BruteForce() {}
@@ -20,31 +19,30 @@ public:
     }
     __aicore__ inline void Process() {
         const int length = total_size / batch_size / num_groups;
-        float mean[MAX_GROUP] = {};
         for (int index = 0, i = 0; i < batch_size; ++i) {
             for (int j = 0; j < num_groups; ++j) {
                 for (int k = 0; k < length; ++k) {
                     T val = Gm_x.GetValue(index++);
-                    mean[i*num_groups+j] += (float)val;
+                    mean[i * num_groups + j] += (float)val;
                 }
-                mean[i*num_groups+j] /= length;
+                mean[i * num_groups + j] /= length;
             }
         }
-        float rstd[MAX_GROUP] = {};
         for (int index = 0, i = 0; i < batch_size; ++i) {
             for (int j = 0; j < num_groups; ++j) {
                 float avg = mean[i*num_groups+j];
                 for (int k = 0; k < length; ++k) {
                     float val = Gm_x.GetValue(index++);
-                    rstd[i*num_groups+j] += (val - avg) * (val - avg);
+                    rstd[i * num_groups + j] += (val - avg) * (val - avg);
                 }
-                rstd[i*num_groups+j] /= length;
+                rstd[i * num_groups + j] /= length;
             }
         }
         auto block_size = num_channels / num_groups;
         for (int index = 0, i = 0; i < batch_size; ++i) {
             for (int j = 0; j < num_channels; ++j) {
-                float avg = mean[i*num_groups+j / block_size], var = rstd[i*num_groups+j / block_size];
+                float avg = mean[i * num_groups + j / block_size];
+                float var = rstd[i * num_groups + j / block_size];
                 float gm = Gm_gamma.GetValue(j), bt = Gm_beta.GetValue(j);
                 for (int k = 0; k < total_size / batch_size / num_channels; ++k) {
                     float x = Gm_x.GetValue(index);
@@ -59,6 +57,8 @@ private:
     GlobalTensor<T> Gm_x, Gm_gamma, Gm_beta, Gm_y, Gm_mean, Gm_rstd;
     int32_t batch_size, num_groups, num_channels, total_size;
     float epsilon;
+    float mean[1024 + 512];
+    float rstd[1024 + 512];
 };
 extern "C" __global__ __aicore__ void group_norm_v2(GM_ADDR x, GM_ADDR gamma, GM_ADDR beta, GM_ADDR y, GM_ADDR mean, GM_ADDR rstd, GM_ADDR workspace, GM_ADDR tiling) {
     GET_TILING_DATA(tiling_data, tiling);
