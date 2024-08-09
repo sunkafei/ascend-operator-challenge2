@@ -1,6 +1,6 @@
 #include "kernel_operator.h"
 using namespace AscendC;
-constexpr int MAX_GROUP = 64;
+constexpr int MAX_GROUP = 8;
 template<typename T> class BruteForce {
 public:
     __aicore__ inline BruteForce() {}
@@ -19,7 +19,7 @@ public:
         Gm_rstd.SetGlobalBuffer((__gm__ T*)rstd, num_groups);
     }
     __aicore__ inline void Process() {
-        /*float mean[MAX_GROUP] = {};
+        float mean[MAX_GROUP] = {};
         for (int index = 0, i = 0; i < batch_size; ++i) {
             for (int j = 0; j < num_groups; ++j) {
                 for (int k = 0; k < total_size / batch_size / num_groups; ++k) {
@@ -57,10 +57,8 @@ public:
                     Gm_y.SetValue(index++, (T)result);
                 }
             }
-        }*/
-        Gm_y.SetValue(0, (T)0.0f);
-        Gm_y.SetValue(1, (T)0.0f);
-        DataCacheCleanAndInvalid<T, CacheLine::SINGLE_CACHE_LINE>(Gm_y);
+        }
+        DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(Gm_y);
     }
 private:
     GlobalTensor<T> Gm_x, Gm_gamma, Gm_beta, Gm_y, Gm_mean, Gm_rstd;

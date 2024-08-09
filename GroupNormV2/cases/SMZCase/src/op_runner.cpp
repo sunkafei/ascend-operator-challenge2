@@ -384,7 +384,7 @@ bool OpRunner::RunOp()
             (void)aclrtDestroyStream(stream);
             return false;
         }
-        INFO_LOG("Copy output[%zu] success", i);
+        INFO_LOG("Copy output[%zu] success", size);
     }
 
     (void)aclrtDestroyStream(stream);
