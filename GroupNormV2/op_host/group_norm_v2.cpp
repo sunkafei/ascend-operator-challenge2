@@ -1,23 +1,33 @@
 
 #include "group_norm_v2_tiling.h"
 #include "register/op_def_registry.h"
-
+#include <iostream>
 
 namespace optiling {
-static ge::graphStatus TilingFunc(gert::TilingContext* context)
-{
+static ge::graphStatus TilingFunc(gert::TilingContext* context) {
+    GroupNormV2TilingData tiling;
 
-  GroupNormV2TilingData tiling;
-  const gert::StorageShape* x1_shape = context->GetInputShape(0);
-  int32_t data_sz = 1;
-  for (int i = 0; i < x1_shape->GetStorageShape().GetDimNum(); i++)
-    data_sz *= x1_shape->GetStorageShape().GetDim(i);
-  tiling.set_size(data_sz);
-  context->SetBlockDim(8);
-  tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());
-  context->GetRawTilingData()->SetDataSize(tiling.GetDataSize());
+    auto num_groups_ptr = context->GetAttrs()->GetInt(0);
+    tiling.set_num_groups(*num_groups_ptr);
+    auto shape = context->GetInputShape(0)->GetStorageShape();
+    auto batch_size = shape.GetDim(0);
+    tiling.set_batch_size(batch_size);
+    auto num_channels = shape.GetDim(1);
+    tiling.set_num_channels(num_channels);
+    auto total_size = context->GetInputTensor(0)->GetShapeSize();
+    tiling.set_total_size(total_size);
+    auto epsilon_ptr = context->GetAttrs()->GetFloat(2);
+    tiling.set_epsilon(*epsilon_ptr);
+    std::cerr << "num_groups: " << *num_groups_ptr << std::endl;
+    std::cerr << "batch_size: " << batch_size << std::endl;
+    std::cerr << "num_channels: " << num_channels << std::endl;
+    std::cerr << "total_size: " << total_size << std::endl;
+    std::cerr << "epsilon: " << *epsilon_ptr << std::endl;
 
-  return ge::GRAPH_SUCCESS;
+    context->SetBlockDim(1);
+    tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());
+    context->GetRawTilingData()->SetDataSize(tiling.GetDataSize());
+    return ge::GRAPH_SUCCESS;
 }
 }
 
