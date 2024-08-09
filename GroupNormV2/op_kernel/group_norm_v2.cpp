@@ -23,9 +23,9 @@ public:
             for (int j = 0; j < num_groups; ++j) {
                 for (int k = 0; k < length; ++k) {
                     T val = Gm_x.GetValue(index++);
-                    mean[i * num_groups + j] += (float)val;
+                    mean[i * num_groups + j] += (float)val / length;
                 }
-                mean[i * num_groups + j] /= length;
+                //mean[i * num_groups + j] /= length;
             }
         }
         for (int index = 0, i = 0; i < batch_size; ++i) {
@@ -33,9 +33,9 @@ public:
                 float avg = mean[i*num_groups+j];
                 for (int k = 0; k < length; ++k) {
                     float val = Gm_x.GetValue(index++);
-                    rstd[i * num_groups + j] += (val - avg) * (val - avg);
+                    rstd[i * num_groups + j] += (val - avg) * (val - avg) / length;
                 }
-                rstd[i * num_groups + j] /= length;
+                //rstd[i * num_groups + j] /= length;
             }
         }
         auto block_size = num_channels / num_groups;
