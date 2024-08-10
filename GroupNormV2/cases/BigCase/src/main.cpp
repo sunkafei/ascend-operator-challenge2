@@ -24,13 +24,13 @@ int deviceId = 0;
 OperatorDesc CreateOpDesc()
 {
     // define operator
-    std::vector<int64_t> shape_x {3, 4,512,512};
+    std::vector<int64_t> shape_x {64, 4,512,256};
     std::vector<int64_t> shape_gamma_beta {4};
     
     aclDataType dataType = ACL_FLOAT;
     aclFormat format = ACL_FORMAT_ND;
     OperatorDesc opDesc;
-    opDesc.numGroups = 1;
+    opDesc.numGroups = 2;
     std::vector<int64_t> shape_mean_rstd {opDesc.numGroups};
     opDesc.dataFormat = "NCHW";
     opDesc.eps = 0.01;
