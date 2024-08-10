@@ -28,7 +28,7 @@ public:
             return;
         }
         const int length = total_size / batch_size / num_groups;
-        for (int index = 0, i = L; i < R; ++i) {
+        for (int index = total_size / batch_size * L, i = L; i < R; ++i) {
             for (int j = 0; j < num_groups; ++j) {
                 for (int k = 0; k < length; ++k) {
                     T val = Gm_x.GetValue(index++);
@@ -37,7 +37,7 @@ public:
                 //mean[i * num_groups + j] /= length;
             }
         }
-        for (int index = 0, i = L; i < R; ++i) {
+        for (int index = total_size / batch_size * L, i = L; i < R; ++i) {
             for (int j = 0; j < num_groups; ++j) {
                 float avg = mean[i*num_groups+j];
                 for (int x = 0; x < chunk_size; ++x) {
@@ -51,7 +51,7 @@ public:
             }
         }
         auto block_size = num_channels / num_groups;
-        for (int index = 0, i = L; i < R; ++i) {
+        for (int index = total_size / batch_size * L, i = L; i < R; ++i) {
             for (int j = 0; j < num_channels; ++j) {
                 float avg = mean[i * num_groups + j / block_size];
                 float var = rstd[i * num_groups + j / block_size];
