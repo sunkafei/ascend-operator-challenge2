@@ -18,7 +18,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     uint64_t ub_size;
     ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::UB, ub_size);
     auto aivNum = ascendcPlatform.GetCoreNum();
-    std::cout << aivNum << " " << ub_size << " " << ascendcPlatform.GetCoreNumAic() << " " << ascendcPlatform.GetCoreNumAiv() << std::endl;
+    // std::cout << aivNum << " " << ub_size << " " << ascendcPlatform.GetCoreNumAic() << " " << ascendcPlatform.GetCoreNumAiv() << std::endl;
 
     auto dt = context->GetInputTensor(0)->GetDataType();
     if(dt == ge::DT_INT8){
@@ -47,7 +47,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         type |= 2;
     }
     tiling.set_type(type);
-    std::cout << mode << " " << format << " " << type << std::endl;
+    // std::cout << mode << " " << format << " " << type << std::endl;
 
     uint32_t totalLength = context->GetInputTensor(1)->GetShapeSize();
 
@@ -72,7 +72,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling.set_core_size(core_size);
     tiling.set_core_remain(core_remain);
 
-    std::cout << aivNum << " " << core_size << " " << core_remain << " " << totalLength << std::endl;
+    // std::cout << aivNum << " " << core_size << " " << core_remain << " " << totalLength << std::endl;
     context->SetBlockDim(aivNum);
 
     // auto bs = *context->GetAttrs()->GetInt(0);
