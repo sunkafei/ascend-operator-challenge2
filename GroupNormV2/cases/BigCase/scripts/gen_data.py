@@ -5,10 +5,10 @@ import os
 
 np.random.seed(123)
 def gen_golden_data_simple():
-    input_x = np.random.uniform(-10, 10, [3, 4,512,512 ]).astype(np.float32)
+    input_x = np.random.uniform(-10, 10, [64, 4,512,237 ]).astype(np.float32)
     input_gamma = np.random.uniform(1, 1, [4]).astype(np.float32)
     input_beta = np.random.uniform(0, 0, [4]).astype(np.float32)
-    num_groups = np.array([1]).astype(np.int32)
+    num_groups = np.array([2]).astype(np.int32)
     data_format = "NCHW"
     eps = 0.01
     is_training = True
