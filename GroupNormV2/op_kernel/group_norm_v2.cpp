@@ -27,8 +27,8 @@ public:
         if (L >= R) {
             return;
         }
-        float mean[512];
-        float rstd[512];
+        float mean[512] = {};
+        float rstd[512] = {};
         const int length = total_size / batch_size / num_groups;
         for (int index = total_size / batch_size * L, i = L; i < R; ++i) {
             for (int j = 0; j < num_groups; ++j) {
@@ -40,7 +40,7 @@ public:
         }
         for (int index = total_size / batch_size * L, i = L; i < R; ++i) {
             for (int j = 0; j < num_groups; ++j) {
-                float avg = mean[i*num_groups+j];
+                float avg = mean[(i - L) * num_groups + j];
                 for (int x = 0; x < chunk_size; ++x) {
                     float sum = 0;
                     for (int k = 0; k < length / chunk_size; ++k) {
