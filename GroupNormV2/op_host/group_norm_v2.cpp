@@ -2,13 +2,14 @@
 #include "group_norm_v2_tiling.h"
 #include "register/op_def_registry.h"
 #include <iostream>
+#include <cmath>
 
 namespace optiling {
 static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     GroupNormV2TilingData tiling;
 
-    auto num_groups_ptr = context->GetAttrs()->GetInt(0);
-    tiling.set_num_groups(*num_groups_ptr);
+    auto num_groups = *context->GetAttrs()->GetInt(0);
+    tiling.set_num_groups(num_groups);
     auto shape = context->GetInputShape(0)->GetStorageShape();
     auto batch_size = shape.GetDim(0);
     tiling.set_batch_size(batch_size);
@@ -18,7 +19,15 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     tiling.set_total_size(total_size);
     auto epsilon_ptr = context->GetAttrs()->GetFloat(2);
     tiling.set_epsilon(*epsilon_ptr);
-    std::cerr << "num_groups: " << *num_groups_ptr << std::endl;
+    int32_t dimension = total_size / batch_size / num_groups;
+    int32_t chunk_size = std::ceil(std::sqrt(dimension));
+    while (dimension % chunk_size) {
+        chunk_size -= 1;
+    }
+    tiling.set_chunk_size(chunk_size);
+    
+    std::cerr << "chunk_size: " << chunk_size << std::endl;
+    std::cerr << "num_groups: " << num_groups << std::endl;
     std::cerr << "batch_size: " << batch_size << std::endl;
     std::cerr << "num_channels: " << num_channels << std::endl;
     std::cerr << "total_size: " << total_size << std::endl;
