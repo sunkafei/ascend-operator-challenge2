@@ -1,6 +1,7 @@
 
 #include "group_norm_v2_tiling.h"
 #include "register/op_def_registry.h"
+#include "tiling/platform/platform_ascendc.h"
 #include <iostream>
 #include <cmath>
 
@@ -17,25 +18,43 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     tiling.set_num_channels(num_channels);
     auto total_size = context->GetInputTensor(0)->GetShapeSize();
     tiling.set_total_size(total_size);
-    auto epsilon_ptr = context->GetAttrs()->GetFloat(2);
-    tiling.set_epsilon(*epsilon_ptr);
+    auto epsilon = *context->GetAttrs()->GetFloat(2);
+    tiling.set_epsilon(epsilon);
     int32_t dimension = total_size / batch_size / num_groups;
     int32_t chunk_size = std::ceil(std::sqrt(dimension));
     while (dimension % chunk_size) {
         chunk_size -= 1;
     }
     tiling.set_chunk_size(chunk_size);
+    int32_t sizeofdatatype;
+    auto dt = context->GetInputTensor(0)->GetDataType();
+    if (dt == ge::DT_FLOAT16 || dt == ge::DT_BF16) {
+        sizeofdatatype = 2;
+    }
+    else {
+        sizeofdatatype = 4;
+    }
+    auto ascendcPlatform = platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
+    auto num_cores = ascendcPlatform.GetCoreNum();
+    if (total_size / batch_size % (64 / sizeofdatatype) != 0) {
+        num_cores = 1;
+    }
+    auto span = (batch_size - 1) / num_cores + 1;
+    tiling.set_span(span);
+    context->SetBlockDim(num_cores);
+    tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());
+    context->GetRawTilingData()->SetDataSize(tiling.GetDataSize());
+
     
     std::cerr << "chunk_size: " << chunk_size << std::endl;
     std::cerr << "num_groups: " << num_groups << std::endl;
     std::cerr << "batch_size: " << batch_size << std::endl;
     std::cerr << "num_channels: " << num_channels << std::endl;
     std::cerr << "total_size: " << total_size << std::endl;
-    std::cerr << "epsilon: " << *epsilon_ptr << std::endl;
+    std::cerr << "epsilon: " << epsilon << std::endl;
+    std::cerr << "num_cores: " << num_cores << std::endl;
+    std::cerr << "span: " << span << std::endl;
 
-    context->SetBlockDim(1);
-    tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());
-    context->GetRawTilingData()->SetDataSize(tiling.GetDataSize());
     return ge::GRAPH_SUCCESS;
 }
 }
