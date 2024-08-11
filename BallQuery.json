@@ -1,0 +1,78 @@
+[
+    {
+        "op": "BallQuery",
+        "language": "cpp",
+        "input_desc": [
+            {
+                "name": "xyz",
+                "param_type": "required",
+                "format": [
+                    "ND", "ND"
+                ],
+                "type": [
+                    "fp32", "fp16"
+                ]
+            },
+            {
+                "name": "center_xyz",
+                "param_type": "required",
+                "format": [
+                    "ND", "ND"
+                ],
+                "type": [
+                    "fp32", "fp16"
+                ]
+            },
+            {
+                "name": "xyz_batch_cnt",
+                "param_type": "optional",
+                "format": [
+                    "ND", "ND"
+                ],
+                "type": [
+                    "int32", "int32"
+                ]
+            },
+            {
+                "name": "center_xyz_batch",
+                "param_type": "optional",
+                "format": [
+                    "ND", "ND"
+                ],
+                "type": [
+                    "int32", "int32"
+                ]
+            }
+        ],
+        "output_desc": [
+            {
+                "name": "idx",
+                "param_type": "required",
+                "format": [
+                    "ND", "ND"
+                ],
+                "type": [
+                    "int32", "int32"
+                ]
+            }
+        ],
+        "attr": [
+            {
+                "name": "min_radius",
+                "param_type": "required",
+                "type": "float"
+            },
+            {
+                "name": "max_radius",
+                "param_type": "required",
+                "type": "float"
+            },
+            {
+                "name": "sample_num",
+                "param_type": "required",
+                "type": "int"
+            }
+        ]
+    }
+]
+
