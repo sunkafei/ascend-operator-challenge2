@@ -38,8 +38,8 @@ public:
         Gm_y.SetGlobalBuffer((__gm__ T*)y, total_size);
         Gm_mean.SetGlobalBuffer((__gm__ T*)mean, num_groups);
         Gm_rstd.SetGlobalBuffer((__gm__ T*)rstd, num_groups);
-        pipe.InitBuffer(Q_x, 2, sizeof(T) * tile_length);
-        pipe.InitBuffer(Q_y, 2, sizeof(T) * tile_length);
+        pipe.InitBuffer(Q_x, 4, sizeof(T) * tile_length);
+        pipe.InitBuffer(Q_y, 4, sizeof(T) * tile_length);
     }
     __aicore__ inline void Process() {
         if (L >= R) {
@@ -119,8 +119,8 @@ private:
     int32_t length, tile_length, splits;
     float epsilon;
     TPipe pipe;
-    TQue<QuePosition::VECIN, 2> Q_x;
-    TQue<QuePosition::VECOUT, 2> Q_y;
+    TQue<QuePosition::VECIN, 4> Q_x;
+    TQue<QuePosition::VECOUT, 4> Q_y;
 };
 template<typename T> class BruteForce {
 public:
