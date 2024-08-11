@@ -49,7 +49,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling.set_type(type);
     // std::cout << mode << " " << format << " " << type << std::endl;
 
-    uint32_t totalLength = context->GetInputTensor(1)->GetShapeSize();
+    uint32_t totalLength = context->GetInputTensor(0)->GetShapeSize();
 
     uint32_t ALIGN_NUM = BLOCK_SIZE / sizeofdatatype;
     uint32_t tiling_size = ((ub_size) / BLOCK_SIZE / 2) / NUM;
@@ -63,7 +63,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     uint32_t core_size = (totalLength / aivNum) / (ALIGN_NUM * 8) * (ALIGN_NUM * 8);
     uint32_t core_remain = totalLength - aivNum * core_size;
 
-    totalLength = context->GetInputTensor(0)->GetShapeSize();
     tiling.set_totalLength(totalLength);
     tiling.set_ALIGN_NUM(ALIGN_NUM);
     tiling.set_tiling_size(tiling_size);
