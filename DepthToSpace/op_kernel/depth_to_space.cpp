@@ -1,6 +1,6 @@
 #include "kernel_operator.h"
 using namespace AscendC;
-constexpr int32_t BUFFER_NUM = 2;                                     // tensor num for each queue
+constexpr int32_t BUFFER_NUM = 4;                                     // tensor num for each queue
 
 template<typename T, unsigned opType> class KernelDeepToSpace {
 public:
@@ -31,11 +31,45 @@ public:
         this->tileNum = this->blockLength / this->tileLength + (this->blockLength % this->tileLength > 0);
 
         // pipe alloc memory to queue, the unit is Bytes
-        pipe.InitBuffer(inQueueX, BUFFER_NUM, this->tileLength * sizeof(T));
+        // pipe.InitBuffer(inQueueX, BUFFER_NUM, this->tileLength * sizeof(T));
         pipe.InitBuffer(outQueueZ, BUFFER_NUM, this->tileLength * sizeof(T));
     }
     __aicore__ inline void Process()
-    {if constexpr (opType == 0){
+    {
+        
+        // loop count need to be doubled, due to double buffer
+        int32_t loopCount = this->tileNum;
+        // tiling strategy, pipeline parallel
+        for (int32_t i = 0; i < loopCount-1; i++) {
+            // CopyIn(i, this->tileLength);
+            Compute(i, this->tileLength);
+            CopyOut(i, this->tileLength);
+        }
+        auto length = this->ed - this->st - this->tileLength * (loopCount - 1);
+        // CopyIn(loopCount - 1, length);
+        Compute(loopCount - 1, length);
+        CopyOut(loopCount - 1, length);
+    }
+
+private:
+    // __aicore__ inline void CopyIn(int32_t progress, uint32_t length)
+    // {
+    //     // alloc tensor from queue memory
+    //     LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
+    //     // copy progress_th tile from global tensor to local tensor
+    //     DataCopy(xLocal, xGm[progress * this->tileLength], length);
+    //     // enque input tensors to VECIN queue
+    //     inQueueX.EnQue(xLocal);
+    // }
+    __aicore__ inline void Compute(int32_t progress, uint32_t length)
+    {
+        auto st = this->st + progress * this->tileLength;
+        auto ed = st + length;
+        // deque input tensors from VECIN queue
+        // LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+        LocalTensor<T> zLocal = outQueueZ.AllocTensor<T>();
+
+        if constexpr (opType == 0){
             auto C = this->shape[1] / this->bs / this->bs;
             auto div1 = this->shape[1] * this->shape[2] * this->shape[3];
             auto div2 = this->shape[2] * this->shape[3] * this->bs * this->bs;
@@ -48,7 +82,7 @@ public:
             auto mul3 = this->shape[2] * this->shape[3] * C;
             auto mul4 = this->shape[2] * this->shape[3];
             auto mul5 = this->shape[3];
-            for(uint32_t i=this->st;i<this->ed;i++){
+            for(uint32_t i=st;i<ed;i++){
                 auto b = i / div1;
                 auto c = i / div2 % C;
                 auto h = i / div3 % this->shape[2];
@@ -56,7 +90,7 @@ public:
                 auto w = i / div5 % this->shape[3];
                 auto y = i % this->bs;
 
-                zGm.SetValue(i - this->startPointer, xGm.GetValue(b * mul1 + x * mul2 + y * mul3 + c * mul4 + h * mul5 + w));
+                zLocal.SetValue(i - st, xGm.GetValue(b * mul1 + x * mul2 + y * mul3 + c * mul4 + h * mul5 + w));
             }
         }else if constexpr (opType == 1){
             auto C = this->shape[1] / this->bs / this->bs;
@@ -71,7 +105,7 @@ public:
             auto mul3 = this->shape[2] * this->shape[3] * this->bs;
             auto mul4 = this->shape[2] * this->shape[3];
             auto mul5 = this->shape[3];
-            for(uint32_t i=this->st;i<this->ed;i++){
+            for(uint32_t i=st;i<ed;i++){
                 auto b = i / div1;
                 auto c = i / div2 % C;
                 auto h = i / div3 % this->shape[2];
@@ -79,7 +113,7 @@ public:
                 auto w = i / div5 % this->shape[3];
                 auto y = i % this->bs;
 
-                zGm.SetValue(i - this->startPointer, xGm.GetValue(b * mul1 + c * mul2 + x * mul3 + y * mul4 + h * mul5 + w));
+                zLocal.SetValue(i - st, xGm.GetValue(b * mul1 + c * mul2 + x * mul3 + y * mul4 + h * mul5 + w));
             }
         }else if constexpr (opType == 2){
             auto C = this->shape[3] / this->bs / this->bs;
@@ -94,7 +128,7 @@ public:
             auto mul3 = this->shape[3];
             auto mul4 = C * this->bs;
             auto mul5 = C;
-            for(uint32_t i=this->st;i<this->ed;i++){
+            for(uint32_t i=st;i<ed;i++){
                 auto b = i / div1;
                 auto h = i / div2 % this->shape[1];
                 auto x = i / div3 % this->bs;
@@ -102,7 +136,7 @@ public:
                 auto y = i / div5 % this->bs;
                 auto c = i % div5;
 
-                zGm.SetValue(i - this->startPointer, xGm.GetValue(b * mul1 + h * mul2 + w * mul3 + x * mul4 + y * mul5 + c));
+                zLocal.SetValue(i - st, xGm.GetValue(b * mul1 + h * mul2 + w * mul3 + x * mul4 + y * mul5 + c));
             }
         }else if constexpr (opType == 3){
             auto C = this->shape[3] / this->bs / this->bs;
@@ -117,7 +151,7 @@ public:
             auto mul3 = this->shape[3];
             auto mul4 = this->bs * this->bs;
             auto mul5 = this->bs;
-            for(uint32_t i=this->st;i<this->ed;i++){
+            for(uint32_t i=st;i<ed;i++){
                 auto b = i / div1;
                 auto h = i / div2 % this->shape[1];
                 auto x = i / div3 % this->bs;
@@ -125,44 +159,14 @@ public:
                 auto y = i / div5 % this->bs;
                 auto c = i % div5;
 
-                zGm.SetValue(i - this->startPointer, xGm.GetValue(b * mul1 + h * mul2 + w * mul3 + c * mul4 + x * mul5 + y));
+                zLocal.SetValue(i - st, xGm.GetValue(b * mul1 + h * mul2 + w * mul3 + c * mul4 + x * mul5 + y));
             }
         }
-        DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(zGm);
-        /*// loop count need to be doubled, due to double buffer
-        int32_t loopCount = this->tileNum;
-        // tiling strategy, pipeline parallel
-        for (int32_t i = 0; i < loopCount-1; i++) {
-            CopyIn(i, this->tileLength);
-            Compute(i, this->tileLength);
-            CopyOut(i, this->tileLength);
-        }
-        auto length = this->blockLength - this->tileLength * (loopCount - 1);
-        CopyIn(loopCount - 1, length);
-        Compute(loopCount - 1, length);
-        CopyOut(loopCount - 1, length);*/
-    }
-
-private:
-    __aicore__ inline void CopyIn(int32_t progress, uint32_t length)
-    {
-        // alloc tensor from queue memory
-        LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
-        // copy progress_th tile from global tensor to local tensor
-        DataCopy(xLocal, xGm[progress * this->tileLength], length);
-        // enque input tensors to VECIN queue
-        inQueueX.EnQue(xLocal);
-    }
-    __aicore__ inline void Compute(int32_t progress, uint32_t length)
-    {
-        // deque input tensors from VECIN queue
-        LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-        LocalTensor<T> zLocal = outQueueZ.AllocTensor<T>();
 
         // enque the output tensor to VECOUT queue
         outQueueZ.EnQue<T>(zLocal);
         // free input tensors for reuse
-        inQueueX.FreeTensor(xLocal);
+        // inQueueX.FreeTensor(xLocal);
     }
     __aicore__ inline void CopyOut(int32_t progress, uint32_t length)
     {
