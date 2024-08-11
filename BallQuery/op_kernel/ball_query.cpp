@@ -67,7 +67,7 @@ public:
         for(uint32_t i=this->st;i<this->ed;i++){
             uint32_t b;
             if constexpr (opType == 1){
-                uint32_t s=i;
+                uint32_t s = i;
                 b = 0;
                 while(b < this->bs && s >= sz1[b]){
                     s -= sz1[b++];

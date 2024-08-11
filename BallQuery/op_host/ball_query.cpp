@@ -41,6 +41,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         tiling.set_opType(1);
         auto b = context->GetInputTensor(2)->GetShapeSize() < context->GetInputTensor(1)->GetShapeSize() ? context->GetInputTensor(2)->GetShapeSize() : context->GetInputTensor(1)->GetShapeSize();
         tiling.set_bDim(b);
+        abort();
     }
     tiling.set_min_radius(*context->GetAttrs()->GetFloat(0));
     tiling.set_max_radius(*context->GetAttrs()->GetFloat(1));
