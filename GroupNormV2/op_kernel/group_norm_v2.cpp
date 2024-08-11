@@ -13,8 +13,8 @@ public:
         this->epsilon = epsilon;
         this->L = GetBlockIdx() * span;
         this->R = (GetBlockIdx() + 1) * span;
-        if (this->R > batch_size) {
-            this->R = batch_size;
+        if (this->R > batch_size * num_groups) {
+            this->R = batch_size * num_groups;
         }
         Gm_x.SetGlobalBuffer((__gm__ T*)x, total_size);
         Gm_gamma.SetGlobalBuffer((__gm__ T*)gamma, num_channels);
@@ -30,34 +30,31 @@ public:
         float mean[512] = {};
         float rstd[512] = {};
         const int length = total_size / batch_size / num_groups;
-        for (int index = total_size / batch_size * L, i = L; i < R; ++i) {
-            for (int j = 0; j < num_groups; ++j) {
-                for (int k = 0; k < length; ++k) {
-                    T val = Gm_x.GetValue(index++);
-                    mean[(i - L) * num_groups + j] += (float)val / length;
-                }
+        for (int index = L * length, i = L; i < R; ++i) {
+            for (int j = 0; j < length; ++j) {
+                T val = Gm_x.GetValue(index++);
+                mean[i] += (float)val / length;
             }
         }
-        for (int index = total_size / batch_size * L, i = L; i < R; ++i) {
-            for (int j = 0; j < num_groups; ++j) {
-                float avg = mean[(i - L) * num_groups + j];
-                for (int x = 0; x < chunk_size; ++x) {
-                    float sum = 0;
-                    for (int k = 0; k < length / chunk_size; ++k) {
-                        float val = Gm_x.GetValue(index++);
-                        sum += (val - avg) * (val - avg);
-                    }
-                    rstd[(i - L) * num_groups + j] += sum / length;
+        for (int index = L * length, i = L; i < R; ++i) {
+            float avg = mean[i];
+            for (int x = 0; x < chunk_size; ++x) {
+                float sum = 0;
+                for (int y = 0; y < length / chunk_size; ++y) {
+                    float val = Gm_x.GetValue(index++);
+                    sum += (val - avg) * (val - avg);
                 }
+                rstd[i] += sum / length;
             }
         }
-        auto block_size = num_channels / num_groups;
-        for (int index = total_size / batch_size * L, i = L; i < R; ++i) {
-            for (int j = 0; j < num_channels; ++j) {
-                float avg = mean[(i - L) * num_groups + j / block_size];
-                float var = rstd[(i - L) * num_groups + j / block_size];
-                float gm = Gm_gamma.GetValue(j), bt = Gm_beta.GetValue(j);
-                for (int k = 0; k < total_size / batch_size / num_channels; ++k) {
+        const auto block_size = num_channels / num_groups;
+        for (int index = L * length, i = L; i < R; ++i) {
+            float avg = mean[i];
+            float var = rstd[i];
+            for (int j = 0; j < block_size; ++j) {
+                float gm = Gm_gamma.GetValue(i % num_groups * block_size + j);
+                float bt = Gm_beta.GetValue(i % num_groups * block_size + j);
+                for (int k = 0; k < length / block_size; ++k) {
                     float x = Gm_x.GetValue(index);
                     float result = gm * ((x - avg) / sqrt(var + epsilon)) + bt;
                     Gm_y.SetValue(index++, (T)result);

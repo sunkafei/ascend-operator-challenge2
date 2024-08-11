@@ -36,10 +36,10 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     }
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
     auto num_cores = ascendcPlatform.GetCoreNum();
-    if (total_size / batch_size % (64 / sizeofdatatype) != 0) {
+    if (total_size / batch_size / num_groups % (64 / sizeofdatatype) != 0) {
         num_cores = 1;
     }
-    auto span = (batch_size - 1) / num_cores + 1;
+    auto span = (batch_size * num_groups - 1) / num_cores + 1;
     tiling.set_span(span);
     context->SetBlockDim(num_cores);
     tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());
