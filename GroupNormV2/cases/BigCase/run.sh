@@ -51,6 +51,7 @@ function main {
     
     # rm ./input/*.bin
     rm -rf ./output/output*.bin > /dev/null
+    rm -rf ./output/PROF* > /dev/null
 
     # 2. 生成或复用输入数据和真值数据 
     if [ -d "./input" ]; then
@@ -96,13 +97,17 @@ function main {
     # 4. 运行可执行文件
     cd $CURRENT_DIR/output
     echo "INFO: execute op!"
-    timeout 30 ./execute_op
+    #timeout 30 ./execute_op
+    msprof --application="execute_op" --output=./
 
     if [ $? -ne 0 ]; then
         echo "ERROR: acl executable run failed! please check your project!"
         return 1
     fi
     echo "INFO: acl executable run success!"
+    time_ust=$(awk -F, '{print $(NF-16)}' $(find ./ -name op_summary*.csv) | tail -n 1)
+    time_ust=$(printf "%.0f" $time_ust) 
+    echo $time_ust
 
     # 5. 比较真值文件
     cd $CURRENT_DIR
