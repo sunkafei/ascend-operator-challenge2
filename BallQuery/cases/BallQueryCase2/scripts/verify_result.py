@@ -21,7 +21,7 @@ def verify_result(real_result, golden):
         golden_tmp = np.unique(golden[m])
         mask = ~np.in1d(real_tmp, golden_tmp)
         diff_num = diff_num + len(real_tmp[mask])
-    print(diff_num)
+    #print(diff_num)
     if diff_num < all_len * loss:
         print("test pass")
         return True
