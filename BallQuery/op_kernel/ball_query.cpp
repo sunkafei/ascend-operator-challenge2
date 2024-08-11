@@ -53,7 +53,7 @@ public:
             }
             sum2[0] = 0;
             for(int i=1;i<this->bs;i++){
-                sum2[i] = sum2[i - 1] + sz2[i];
+                sum2[i] = sum2[i - 1] + sz2[i - 1];
             }
         }
         uint32_t N = this->totalLength / this->bs / 3;
@@ -69,8 +69,16 @@ public:
             if constexpr (opType == 1){
                 uint32_t s=i;
                 b = 0;
-                while(s >= sz1[b]){
+                while(b < this->bs && s >= sz1[b]){
                     s -= sz1[b++];
+                }
+                if(b == this->bs){
+                    zGm.SetValue(st - zstartPointer, -1);
+                    for(int k=1;k<this->sample_num;k++){
+                        zGm.SetValue(st + k - zstartPointer, 0);
+                    }
+                    st += this->sample_num;
+                    continue;
                 }
             }else{
                 b = i / N;
