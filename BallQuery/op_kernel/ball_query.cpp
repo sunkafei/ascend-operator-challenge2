@@ -29,8 +29,12 @@ public:
 
         // get start index for current core, core parallel
         xGm.SetGlobalBuffer((__gm__ T*)x + startPointer, totalLength);
-        xGm.SetGlobalBuffer((__gm__ T*)y, totalLength);
+        yGm.SetGlobalBuffer((__gm__ T*)y, totalLength2);
         zGm.SetGlobalBuffer((__gm__ uint32_t*)z + startPointer / 3 * this->sample_num, bufferlength);
+        if constexpr (opType == 1){
+            sz1Gm.SetGlobalBuffer((__gm__ uint32_t*)sz1, bs);
+            sz2Gm.SetGlobalBuffer((__gm__ uint32_t*)sz2, bs);
+        }
 
         this->tileNum = this->blockLength / this->tileLength + (this->blockLength % this->tileLength > 0);
 
@@ -40,33 +44,65 @@ public:
     }
     __aicore__ inline void Process()
     {
+        uint32_t sz1[100], sz2[100];
+        uint32_t sum2[100];
+        if constexpr (opType == 1){
+            for(int i=0;i<this->bs;i++){
+                sz1[i] = sz1Gm.GetValue(i);
+                sz2[i] = sz2Gm.GetValue(i);
+            }
+            sum2[0] = 0;
+            for(int i=1;i<this->bs;i++){
+                sum2[i] = sum2[i - 1] + sz2[i];
+            }
+        }
         uint32_t N = this->totalLength / this->bs / 3;
         uint32_t N2 = this->totalLength2 / this->bs / 3;
         auto min_radius = this->min_radius * this->min_radius;
+        if constexpr (opType == 1) min_radius = 0;
         auto max_radius = this->max_radius * this->max_radius;
         auto sample_num = this->sample_num;
+        auto zstartPointer = this->startPointer / 3 * this->sample_num;
         uint32_t st = this->st * this->sample_num;
         for(uint32_t i=this->st;i<this->ed;i++){
-            uint32_t b = i / N;
-            float x = xGm.GetValue(i * 3);
-            float y = xGm.GetValue(i * 3 + 1);
-            float z = xGm.GetValue(i * 3 + 2);
-            auto ed2 = b * N2 + N2;
+            uint32_t b;
+            if constexpr (opType == 1){
+                uint32_t b=0,s=i;
+                while(s >= sz1[b]){
+                    s -= sz1[b++];
+                }
+            }else{
+                b = i / N;
+            }
+            float x = xGm.GetValue(i * 3 - this->startPointer);
+            float y = xGm.GetValue(i * 3 + 1 - this->startPointer);
+            float z = xGm.GetValue(i * 3 + 2 - this->startPointer);
+            uint32_t st2;
+            uint32_t ed2;
+            if constexpr (opType == 1){
+                st2 = sum2[b];
+                ed2 = sum2[b] + sz2[b];
+            }else{
+                st2 = b * N2;
+                ed2 = b * N2 + N2;
+            }
             uint32_t cnt = 0;
-            for(uint32_t j=b*N2,n=0;j<ed2;j++,n++){
+            uint32_t lst = 0;
+            for(uint32_t j=st2,n=0;j<ed2;j++,n++){
                 float a = yGm.GetValue(j * 3);
                 float b = yGm.GetValue(j * 3 + 1);
                 float c = yGm.GetValue(j * 3 + 2);
                 float tmp = (x - a) * (x - a) + (y - b) * (y - b) + (z - c) * (z - c);
                 if(tmp == 0 || (min_radius <= tmp && tmp < max_radius)){
-                    zGm.SetValue(st + cnt, (int)(tmp == 0 || (min_radius <= tmp && tmp < max_radius)));
-                    // if(cnt == 0){
-                    //     for(int k=1;k<this->sample_num;k++){
-                    //         zGm.SetValue(st + k, n);
-                    //     }
-                    // }
+                    zGm.SetValue(st + cnt - zstartPointer, n);
+                    lst = n;
                     cnt++;
                     if(cnt == this->sample_num) break;
+                }
+            }
+            if(cnt != this->sample_num){
+                for(int k=cnt;k<this->sample_num;k++){
+                    zGm.SetValue(st + k - zstartPointer, lst);
                 }
             }
             st += this->sample_num;
@@ -126,6 +162,8 @@ private:
     TQue<QuePosition::VECOUT, BUFFER_NUM> outQueueZ;
     GlobalTensor<T> xGm;
     GlobalTensor<T> yGm;
+    GlobalTensor<uint32_t> sz1Gm;
+    GlobalTensor<uint32_t> sz2Gm;
     GlobalTensor<uint32_t> zGm;
     uint32_t blockLength;
     uint32_t tileNum;
@@ -144,7 +182,13 @@ private:
 extern "C" __global__ __aicore__ void ball_query(GM_ADDR xyz, GM_ADDR center_xyz, GM_ADDR xyz_batch_cnt, GM_ADDR center_xyz_batch, GM_ADDR idx, GM_ADDR workspace, GM_ADDR tiling) {
     GET_TILING_DATA(tiling_data, tiling);
     // TODO: user kernel impl
-    KernelBallQuery <DTYPE_XYZ, 0> op;
-    op.Init(center_xyz, xyz, center_xyz_batch, xyz_batch_cnt, idx, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.bDim, tiling_data.totalLength2, tiling_data.min_radius, tiling_data.max_radius, tiling_data.sample_num);
-    op.Process();
+    if(tiling_data.opType == 0){
+        KernelBallQuery <DTYPE_XYZ, 0> op;
+        op.Init(center_xyz, xyz, center_xyz_batch, xyz_batch_cnt, idx, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.bDim, tiling_data.totalLength2, tiling_data.min_radius, tiling_data.max_radius, tiling_data.sample_num);
+        op.Process();
+    }else if(tiling_data.opType == 1){
+        KernelBallQuery <DTYPE_XYZ, 1> op;
+        op.Init(center_xyz, xyz, center_xyz_batch, xyz_batch_cnt, idx, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.bDim, tiling_data.totalLength2, tiling_data.min_radius, tiling_data.max_radius, tiling_data.sample_num);
+        op.Process();
+    }
 }
