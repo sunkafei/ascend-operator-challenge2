@@ -38,7 +38,8 @@ public:
         Gm_y.SetGlobalBuffer((__gm__ T*)y, total_size);
         Gm_mean.SetGlobalBuffer((__gm__ T*)mean, num_groups);
         Gm_rstd.SetGlobalBuffer((__gm__ T*)rstd, num_groups);
-        pipe.InitBuffer(Q, 2, sizeof(T) * tile_length);
+        pipe.InitBuffer(Q_x, 2, sizeof(T) * tile_length);
+        pipe.InitBuffer(Q_y, 2, sizeof(T) * tile_length);
     }
     __aicore__ inline void Process() {
         if (L >= R) {
@@ -49,30 +50,68 @@ public:
         for (int i = L; i < R; ++i) {
             for (int j = 0; j < splits; ++j) {
                 {
-                    LocalTensor<T> x = Q.AllocTensor<T>();
+                    LocalTensor<T> x = Q_x.AllocTensor<T>();
                     DataCopy(x, Gm_x[i * length + j * tile_length], tile_length);
-                    Q.EnQue(x);
+                    Q_x.EnQue(x);
                 }
                 {
-                    LocalTensor<T> x = Q.DeQue<T>();
+                    LocalTensor<T> x = Q_x.DeQue<T>();
                     Reduce(x, tile_length);
                     mean[i] += (float)x.GetValue(0) / length;
-                    Q.FreeTensor(x);
+                    Q_x.FreeTensor(x);
                 }
             }
         }
         for (int index = L * length, i = L; i < R; ++i) {
             float avg = mean[i];
-            for (int x = 0; x < chunk_size; ++x) {
-                float sum = 0;
-                for (int y = 0; y < length / chunk_size; ++y) {
-                    float val = Gm_x.GetValue(index++);
-                    sum += (val - avg) * (val - avg);
+            for (int j = 0; j < splits; ++j) {
+                {
+                    LocalTensor<T> x = Q_x.AllocTensor<T>();
+                    DataCopy(x, Gm_x[i * length + j * tile_length], tile_length);
+                    Q_x.EnQue(x);
                 }
-                rstd[i] += sum / length;
+                {
+                    LocalTensor<T> x = Q_x.DeQue<T>();
+                    Adds(x, x, T(-avg), tile_length);
+                    Mul(x, x, x, tile_length);
+                    Reduce(x, tile_length);
+                    rstd[i] += (float)x.GetValue(0) / length;
+                    Q_x.FreeTensor(x);
+                }
             }
         }
-        for (int index = L * length, i = L; i < R; ++i) {
+        for (int i = L; i < R; ++i) {
+            float avg = mean[i];
+            float var = rstd[i];
+            for (int j = 0; j < block_size; ++j) {
+                float gm = Gm_gamma.GetValue(i % num_groups * block_size + j);
+                float bt = Gm_beta.GetValue(i % num_groups * block_size + j);
+                float coef = gm / sqrt(var + epsilon);
+                for (int k = 0; k < splits / block_size; ++k) {
+                    auto index = i * length + (j * splits / block_size + k) * tile_length;
+                    {
+                        LocalTensor<T> x = Q_x.AllocTensor<T>();
+                        DataCopy(x, Gm_x[index], tile_length);
+                        Q_x.EnQue(x);
+                    }
+                    {
+                        LocalTensor<T> y = Q_y.AllocTensor<T>();
+                        LocalTensor<T> x = Q_x.DeQue<T>();
+                        Adds(x, x, T(-avg), tile_length);
+                        Muls(x, x, T(coef), tile_length);
+                        Adds(y, x, T(bt), tile_length);
+                        Q_y.EnQue<T>(y);
+                        Q_x.FreeTensor(x);
+                    }
+                    {
+                        LocalTensor<T> y = Q_y.DeQue<T>();
+                        DataCopy(Gm_y[index], y, tile_length);
+                        Q_y.FreeTensor(y);
+                    }
+                }
+            }
+        }
+        /*for (int index = L * length, i = L; i < R; ++i) {
             float avg = mean[i];
             float var = rstd[i];
             for (int j = 0; j < block_size; ++j) {
@@ -84,7 +123,7 @@ public:
                     Gm_y.SetValue(index++, (T)result);
                 }
             }
-        }
+        }*/
         DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(Gm_y);
     }
 private:
@@ -93,7 +132,8 @@ private:
     int32_t length, tile_length, splits;
     float epsilon;
     TPipe pipe;
-    TQue<QuePosition::VECIN, 2> Q;
+    TQue<QuePosition::VECIN, 2> Q_x;
+    TQue<QuePosition::VECOUT, 2> Q_y;
 };
 template<typename T> class BruteForce {
 public:

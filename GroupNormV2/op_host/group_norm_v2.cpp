@@ -44,7 +44,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
 
     const auto length = total_size / batch_size / num_groups;
     auto tile_length = -1;
-    for (int i = num_channels / num_groups; i < length; ++i) {
+    for (int i = num_channels / num_groups; i < length; i += num_channels / num_groups) {
         if (length % i != 0) {
             continue;
         }
