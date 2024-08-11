@@ -60,6 +60,9 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
             break;
         }
     }
+    if (sizeofdatatype == 2) { // todo:提升fp16的处理精度
+        tile_length = -1;
+    }
     tiling.set_tile_length(tile_length);
 
     context->SetBlockDim(num_cores);

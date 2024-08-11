@@ -82,11 +82,11 @@ public:
         }
         for (int i = L; i < R; ++i) {
             float avg = mean[i];
-            float var = rstd[i];
+            float var = sqrt(rstd[i] + epsilon);
             for (int j = 0; j < block_size; ++j) {
                 float gm = Gm_gamma.GetValue(i % num_groups * block_size + j);
                 float bt = Gm_beta.GetValue(i % num_groups * block_size + j);
-                float coef = gm / sqrt(var + epsilon);
+                float coef = gm / var;
                 for (int k = 0; k < splits / block_size; ++k) {
                     auto index = i * length + (j * splits / block_size + k) * tile_length;
                     {
@@ -111,20 +111,7 @@ public:
                 }
             }
         }
-        /*for (int index = L * length, i = L; i < R; ++i) {
-            float avg = mean[i];
-            float var = rstd[i];
-            for (int j = 0; j < block_size; ++j) {
-                float gm = Gm_gamma.GetValue(i % num_groups * block_size + j);
-                float bt = Gm_beta.GetValue(i % num_groups * block_size + j);
-                for (int k = 0; k < length / block_size; ++k) {
-                    float x = Gm_x.GetValue(index);
-                    float result = gm * ((x - avg) / sqrt(var + epsilon)) + bt;
-                    Gm_y.SetValue(index++, (T)result);
-                }
-            }
-        }*/
-        DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(Gm_y);
+        //DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(Gm_y);
     }
 private:
     GlobalTensor<T> Gm_x, Gm_gamma, Gm_beta, Gm_y, Gm_mean, Gm_rstd;
