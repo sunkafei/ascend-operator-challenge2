@@ -59,7 +59,7 @@ public:
         uint32_t N = this->totalLength / this->bs / 3;
         uint32_t N2 = this->totalLength2 / this->bs / 3;
         auto min_radius = this->min_radius * this->min_radius;
-        if constexpr (opType == 1) min_radius = 0;
+        // if constexpr (opType == 1) min_radius = 0;
         auto max_radius = this->max_radius * this->max_radius;
         auto sample_num = this->sample_num;
         auto zstartPointer = this->startPointer / 3 * this->sample_num;
