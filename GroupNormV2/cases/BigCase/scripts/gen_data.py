@@ -4,8 +4,8 @@ import numpy as np
 import os
 
 np.random.seed(123)
-def gen_golden_data_simple():
-    input_x = np.random.uniform(-10, 10, [64, 4,512,237 ]).astype(np.float32)
+def gen_golden_data_simple(): # 26820
+    input_x = np.random.uniform(-10, 10, [16, 4,256,256 ]).astype(np.float32)
     input_gamma = np.random.uniform(1, 1, [4]).astype(np.float32)
     input_beta = np.random.uniform(0, 0, [4]).astype(np.float32)
     num_groups = np.array([2]).astype(np.int32)

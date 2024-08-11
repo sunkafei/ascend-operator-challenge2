@@ -41,6 +41,27 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     }
     auto span = (batch_size * num_groups - 1) / num_cores + 1;
     tiling.set_span(span);
+
+    const auto length = total_size / batch_size / num_groups;
+    auto tile_length = -1;
+    for (int i = num_channels / num_groups; i < length; ++i) {
+        if (length % i != 0) {
+            continue;
+        }
+        auto tmp = length / i;
+        if (tmp * sizeofdatatype % 32 != 0) {
+            continue;
+        }
+        if (tmp * sizeofdatatype > 256 && tmp % (256 / sizeofdatatype) != 0) {
+            continue;
+        }
+        if (tmp <= 65280 / sizeofdatatype / sizeofdatatype) {
+            tile_length = tmp;
+            break;
+        }
+    }
+    tiling.set_tile_length(tile_length);
+
     context->SetBlockDim(num_cores);
     tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());
     context->GetRawTilingData()->SetDataSize(tiling.GetDataSize());
@@ -54,6 +75,8 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     std::cerr << "epsilon: " << epsilon << std::endl;
     std::cerr << "num_cores: " << num_cores << std::endl;
     std::cerr << "span: " << span << std::endl;
+    std::cerr << "tile_length: " << tile_length << std::endl;
+    std::cerr << "splits: " << length / tile_length << std::endl;
 
     return ge::GRAPH_SUCCESS;
 }

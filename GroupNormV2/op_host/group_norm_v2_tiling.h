@@ -3,6 +3,7 @@
 
 namespace optiling {
 BEGIN_TILING_DATA_DEF(GroupNormV2TilingData)
+  TILING_DATA_FIELD_DEF(int32_t, tile_length);
   TILING_DATA_FIELD_DEF(int32_t, span);
   TILING_DATA_FIELD_DEF(int32_t, chunk_size);
   TILING_DATA_FIELD_DEF(int32_t, batch_size);
