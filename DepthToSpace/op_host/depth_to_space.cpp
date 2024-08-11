@@ -2,7 +2,7 @@
 #include "depth_to_space_tiling.h"
 #include "register/op_def_registry.h"
 #include "tiling/platform/platform_ascendc.h"
-
+#include <iostream>
 
 namespace optiling {
 const uint32_t BLOCK_SIZE = 32;
@@ -18,6 +18,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     uint64_t ub_size;
     ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::UB, ub_size);
     auto aivNum = ascendcPlatform.GetCoreNum();
+    // std::cout << aivNum << " " << ub_size << " " << ascendcPlatform.GetCoreNumAic() << " " << ascendcPlatform.GetCoreNumAiv() << std::endl;
 
     auto dt = context->GetInputTensor(0)->GetDataType();
     if(dt == ge::DT_INT8){
@@ -28,7 +29,25 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         sizeofdatatype = 4;
     }
 
-    tiling.set_lastdim(context->GetInputTensor(2)->GetShapeSize() / context->GetInputTensor(1)->GetShapeSize());
+    tiling.set_bs(*context->GetAttrs()->GetInt(0));
+    const gert::Shape vec = context->GetInputShape(0)->GetOriginShape();
+    uint32_t shape[4] = {0};
+    for(int i=0;i<vec.GetDimNum();i++){
+        shape[i] = vec.GetDim(i);
+    }
+    tiling.set_shape(shape);
+    const char *mode = context->GetAttrs()->GetAttrPointer<char>(1);
+    const char *format = context->GetAttrs()->GetAttrPointer<char>(2);
+
+    uint32_t type = 0;
+    if(strcmp(mode, "CRD") == 0){
+        type |= 1;
+    }
+    if(strcmp(format, "NHWC") == 0){
+        type |= 2;
+    }
+    tiling.set_type(type);
+    // std::cout << mode << " " << format << " " << type << std::endl;
 
     uint32_t totalLength = context->GetInputTensor(1)->GetShapeSize();
 
@@ -39,6 +58,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     uint32_t block_size = tiling_size * ALIGN_NUM;
     aivNum = (aivNum < totalLength / block_size) ? aivNum : (totalLength / block_size);
     aivNum = aivNum >= 1 ? aivNum : 1;
+    aivNum = 1;
 
     uint32_t core_size = (totalLength / aivNum) / (ALIGN_NUM * 8) * (ALIGN_NUM * 8);
     uint32_t core_remain = totalLength - aivNum * core_size;
@@ -52,7 +72,31 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling.set_core_size(core_size);
     tiling.set_core_remain(core_remain);
 
+    // std::cout << aivNum << " " << core_size << " " << core_remain << " " << totalLength << std::endl;
     context->SetBlockDim(aivNum);
+
+    // auto bs = *context->GetAttrs()->GetInt(0);
+    // auto div1 = shape[1] * shape[2] * shape[3];
+    // auto div2 = shape[2] * shape[3];
+    // auto div3 = shape[3];
+    // auto div4 = shape[3] / bs;
+    // auto div5 = shape[3] / bs / bs;
+
+    // auto mul1 = shape[1] * shape[2] * shape[3];
+    // auto mul2 = shape[2] * shape[3];
+    // auto mul3 = shape[2] * bs * div5;
+    // auto mul4 = bs * div5;
+    // auto mul5 = div5;
+    // for(uint32_t i=0;i<3*64*64;i++){
+    //     auto b = i / div1;
+    //     auto h = i / div2 % shape[1];
+    //     auto w = i / div3 % shape[2];
+    //     auto x = i / div4 % bs;
+    //     auto y = i / div5 % bs;
+    //     auto c = i % div5;
+
+    //     std::cout << i << " " << b << " " << h << " " << x << " " << w << " " << y << " " << c << " " << b * mul1 + h * mul2 + x * mul3 + w * mul4 + y * mul5 + c << std::endl;
+    // }
 
     tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());
     context->GetRawTilingData()->SetDataSize(tiling.GetDataSize());
@@ -79,25 +123,25 @@ class DepthToSpace : public OpDef {
 public:
     explicit DepthToSpace(const char* name) : OpDef(name)
     {
-        this->Input("x")
+        Input("x")
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT, ge::DT_FLOAT16, ge::DT_INT32, ge::DT_INT8})
             .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
-        this->Output("y")
+        Output("y")
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT, ge::DT_FLOAT16, ge::DT_INT32, ge::DT_INT8})
             .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
-        this->Attr("block_size").Int();
-        this->Attr("mode").AttrType(OPTIONAL).String("DCR");
-        this->Attr("data_format").AttrType(OPTIONAL).String("NHWC");
+        Attr("block_size").Int();
+        Attr("mode").AttrType(OPTIONAL).String("DCR");
+        Attr("data_format").AttrType(OPTIONAL).String("NHWC");
 
-        this->SetInferShape(ge::InferShape);
+        SetInferShape(ge::InferShape);
 
-        this->AICore()
+        AICore()
             .SetTiling(optiling::TilingFunc);
-        this->AICore().AddConfig("ascend310p");
+        AICore().AddConfig("ascend310p");
 
     }
 };
