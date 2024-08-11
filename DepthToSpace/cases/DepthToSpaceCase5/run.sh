@@ -40,7 +40,7 @@ if [ ! $ASCEND_HOME_DIR ]; then
         export ASCEND_HOME_DIR=/usr/local/Ascend/ascend-toolkit/latest
     fi
 fi
-source $ASCEND_HOME_DIR/bin/setenv.bash
+# source $ASCEND_HOME_DIR/bin/setenv.bash
 
 export DDK_PATH=$ASCEND_HOME_DIR
 arch=$(uname -m)
@@ -49,6 +49,8 @@ export NPU_HOST_LIB=$ASCEND_HOME_DIR/${arch}-linux/lib64
 function main {
     # 1. 清除算子输出和日志文件
     
+    rm ./input/*
+    rm -rf ./output/*
     # rm ./input/*.bin
     rm -rf ./output/output*.bin > /dev/null
 
@@ -96,13 +98,18 @@ function main {
     # 4. 运行可执行文件
     cd $CURRENT_DIR/output
     echo "INFO: execute op!"
-    timeout 30 ./execute_op
+    timeout 30 msprof --application="execute_op" --output=./
 
     if [ $? -ne 0 ]; then
         echo "ERROR: acl executable run failed! please check your project!"
         return 1
     fi
     echo "INFO: acl executable run success!"
+
+    time_ust=$(awk -F, '{print $(NF-16)}' $(find ./ -name op_summary*.csv) | tail -n 1)
+    time_base=167
+    time_ust=$(printf "%.0f" $time_ust)   
+    echo $time_ust
 
     # 5. 比较真值文件
     cd $CURRENT_DIR
