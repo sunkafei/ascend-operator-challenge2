@@ -11,8 +11,6 @@ public:
         this->totalLength = totalLength;
         this->blockLength = core_size + (GetBlockNum() == GetBlockIdx() + 1 ? core_remain : 0);
 
-        // this->st = core_size * GetBlockIdx();
-        // this->ed = this->st + this->blockLength;
         this->st = core_size * GetBlockIdx();
         this->ed = this->st + this->blockLength;
 
@@ -27,7 +25,7 @@ public:
         this->startPointer = startPointer;
 
         // get start index for current core, core parallel
-        xGm.SetGlobalBuffer((__gm__ T*)x + startPointer, bufferlength);
+        xGm.SetGlobalBuffer((__gm__ T*)x, totalLength);
         zGm.SetGlobalBuffer((__gm__ T*)z + startPointer, bufferlength);
 
         this->tileNum = this->blockLength / this->tileLength + (this->blockLength % this->tileLength > 0);
@@ -40,93 +38,94 @@ public:
     {if constexpr (opType == 0){
             auto C = this->shape[1] / this->bs / this->bs;
             auto div1 = this->shape[1] * this->shape[2] * this->shape[3];
-            auto div2 = this->shape[2] * this->shape[3] * this->bs * C;
-            auto div3 = this->shape[2] * this->shape[3] * C;
-            auto div4 = this->shape[2] * this->shape[3];
-            auto div5 = this->shape[3];
+            auto div2 = this->shape[2] * this->shape[3] * this->bs * this->bs;
+            auto div3 = this->shape[3] * this->bs * this->bs;
+            auto div4 = this->shape[3] * this->bs;
+            auto div5 = this->bs;
 
             auto mul1 = this->shape[1] * this->shape[2] * this->shape[3];
-            auto mul2 = this->shape[2] * this->shape[3] * this->bs * this->bs;
-            auto mul3 = this->shape[3] * this->bs * this->bs;
-            auto mul4 = this->shape[3] * this->bs;
-            auto mul5 = this->bs;
+            auto mul2 = this->shape[2] * this->shape[3] * this->bs * C;
+            auto mul3 = this->shape[2] * this->shape[3] * C;
+            auto mul4 = this->shape[2] * this->shape[3];
+            auto mul5 = this->shape[3];
             for(uint32_t i=this->st;i<this->ed;i++){
                 auto b = i / div1;
-                auto x = i / div2 % this->bs;
-                auto y = i / div3 % this->bs;
-                auto c = i / div4 % C;
-                auto h = i / div5 % this->shape[2];
-                auto w = i % this->shape[3];
+                auto c = i / div2 % C;
+                auto h = i / div3 % this->shape[2];
+                auto x = i / div4 % this->bs;
+                auto w = i / div5 % this->shape[3];
+                auto y = i % this->bs;
 
-                zGm.SetValue(b * mul1 + c * mul2 + h * mul3 + x * mul4 + w * mul5 + y - this->startPointer, xGm.GetValue(i - this->startPointer));
+                zGm.SetValue(i - this->startPointer, xGm.GetValue(b * mul1 + x * mul2 + y * mul3 + c * mul4 + h * mul5 + w));
             }
         }else if constexpr (opType == 1){
             auto C = this->shape[1] / this->bs / this->bs;
             auto div1 = this->shape[1] * this->shape[2] * this->shape[3];
             auto div2 = this->shape[2] * this->shape[3] * this->bs * this->bs;
-            auto div3 = this->shape[2] * this->shape[3] * this->bs;
-            auto div4 = this->shape[2] * this->shape[3];
-            auto div5 = this->shape[3];
+            auto div3 = this->shape[3] * this->bs * this->bs;
+            auto div4 = this->shape[3] * this->bs;
+            auto div5 = this->bs;
 
             auto mul1 = this->shape[1] * this->shape[2] * this->shape[3];
             auto mul2 = this->shape[2] * this->shape[3] * this->bs * this->bs;
-            auto mul3 = this->shape[3] * this->bs * this->bs;
-            auto mul4 = this->shape[3] * this->bs;
-            auto mul5 = this->bs;
+            auto mul3 = this->shape[2] * this->shape[3] * this->bs;
+            auto mul4 = this->shape[2] * this->shape[3];
+            auto mul5 = this->shape[3];
             for(uint32_t i=this->st;i<this->ed;i++){
                 auto b = i / div1;
                 auto c = i / div2 % C;
-                auto x = i / div3 % this->bs;
-                auto y = i / div4 % this->bs;
-                auto h = i / div5 % this->shape[2];
-                auto w = i % this->shape[3];
+                auto h = i / div3 % this->shape[2];
+                auto x = i / div4 % this->bs;
+                auto w = i / div5 % this->shape[3];
+                auto y = i % this->bs;
 
-                zGm.SetValue(b * mul1 + c * mul2 + h * mul3 + x * mul4 + w * mul5 + y - this->startPointer, xGm.GetValue(i - this->startPointer));
+                zGm.SetValue(i - this->startPointer, xGm.GetValue(b * mul1 + c * mul2 + x * mul3 + y * mul4 + h * mul5 + w));
             }
         }else if constexpr (opType == 2){
+            auto C = this->shape[3] / this->bs / this->bs;
             auto div1 = this->shape[1] * this->shape[2] * this->shape[3];
             auto div2 = this->shape[2] * this->shape[3];
-            auto div3 = this->shape[3];
-            auto div4 = this->shape[3] / this->bs;
-            auto div5 = this->shape[3] / this->bs / this->bs;
+            auto div3 = this->shape[2] * this->bs * C;
+            auto div4 = this->bs * C;
+            auto div5 = C;
 
             auto mul1 = this->shape[1] * this->shape[2] * this->shape[3];
             auto mul2 = this->shape[2] * this->shape[3];
-            auto mul3 = this->shape[2] * this->bs * div5;
-            auto mul4 = this->bs * div5;
-            auto mul5 = div5;
+            auto mul3 = this->shape[3];
+            auto mul4 = C * this->bs;
+            auto mul5 = C;
             for(uint32_t i=this->st;i<this->ed;i++){
                 auto b = i / div1;
                 auto h = i / div2 % this->shape[1];
-                auto w = i / div3 % this->shape[2];
-                auto x = i / div4 % this->bs;
+                auto x = i / div3 % this->bs;
+                auto w = i / div4 % this->shape[2];
                 auto y = i / div5 % this->bs;
                 auto c = i % div5;
 
-                zGm.SetValue(b * mul1 + h * mul2 + x * mul3 + w * mul4 + y * mul5 + c - this->startPointer, xGm.GetValue(i - this->startPointer));
+                zGm.SetValue(i - this->startPointer, xGm.GetValue(b * mul1 + h * mul2 + w * mul3 + x * mul4 + y * mul5 + c));
             }
         }else if constexpr (opType == 3){
+            auto C = this->shape[3] / this->bs / this->bs;
             auto div1 = this->shape[1] * this->shape[2] * this->shape[3];
             auto div2 = this->shape[2] * this->shape[3];
-            auto div3 = this->shape[3];
-            auto div4 = this->bs * this->bs;
-            auto div5 = this->bs;
-            auto mod3 = this->shape[3] / div4;
+            auto div3 = this->shape[2] * this->bs * C;
+            auto div4 = this->bs * C;
+            auto div5 = C;
 
             auto mul1 = this->shape[1] * this->shape[2] * this->shape[3];
             auto mul2 = this->shape[2] * this->shape[3];
-            auto mul3 = this->shape[2] * this->bs * mod3;
-            auto mul4 = this->bs * mod3;
-            auto mul5 = mod3;
+            auto mul3 = this->shape[3];
+            auto mul4 = this->bs * this->bs;
+            auto mul5 = this->bs;
             for(uint32_t i=this->st;i<this->ed;i++){
                 auto b = i / div1;
                 auto h = i / div2 % this->shape[1];
-                auto w = i / div3 % this->shape[2];
-                auto c = i / div4 % mod3;
-                auto x = i / div5 % this->bs;
-                auto y = i % this->bs;
+                auto x = i / div3 % this->bs;
+                auto w = i / div4 % this->shape[2];
+                auto y = i / div5 % this->bs;
+                auto c = i % div5;
 
-                zGm.SetValue(b * mul1 + h * mul2 + x * mul3 + w * mul4 + y * mul5 + c - this->startPointer, xGm.GetValue(i - this->startPointer));
+                zGm.SetValue(i - this->startPointer, xGm.GetValue(b * mul1 + h * mul2 + w * mul3 + c * mul4 + x * mul5 + y));
             }
         }
         DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(zGm);
