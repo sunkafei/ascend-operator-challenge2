@@ -127,8 +127,8 @@ public:
     __aicore__ inline BallQuery() {}
     __aicore__ inline void Init(GM_ADDR center, GM_ADDR points, GM_ADDR indices, float min_radius, float max_radius, int32_t sample_num, int32_t batch_size, int32_t num_points, int32_t num_centers) {
         ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
-        this->min_radius = min_radius;
-        this->max_radius = max_radius;
+        this->min_radius = min_radius * min_radius;
+        this->max_radius = max_radius * max_radius;
         this->sample_num = sample_num;
         this->batch_size = batch_size;
         this->num_points = num_points;
@@ -145,7 +145,7 @@ public:
         centerGm.SetGlobalBuffer((__gm__ T*)center, batch_size * num_centers * 3);
         indicesGm.SetGlobalBuffer((__gm__ int32_t*)indices, batch_size * num_centers * sample_num);
     }
-    __aicore__ inline void Process() { // 13779
+    __aicore__ inline void Process() { // 8350
         for (int i = L; i < R; ++i) {
             float center_x = centerGm.GetValue(i * 3 + 0);
             float center_y = centerGm.GetValue(i * 3 + 1);
@@ -156,18 +156,20 @@ public:
                 float x = pointsGm.GetValue((batch + k) * 3 + 0);
                 float y = pointsGm.GetValue((batch + k) * 3 + 1);
                 float z = pointsGm.GetValue((batch + k) * 3 + 2);
-                float dis = sqrt((center_x - x) * (center_x - x) + (center_y - y) * (center_y - y) + (center_z - z) * (center_z - z));
+                float dis = (center_x - x) * (center_x - x) + (center_y - y) * (center_y - y) + (center_z - z) * (center_z - z);
                 if (dis == 0 || (min_radius <= dis && dis < max_radius)) {
-                    if (cnt == 0) {
-                        for (int t = 0; t < sample_num; ++t) {
-                            indicesGm.SetValue(i * sample_num + t, k);
-                        }
-                    }
                     indicesGm.SetValue(i * sample_num + cnt, k);
                     cnt += 1;
                     if (cnt >= sample_num) {
                         break;
                     }
+                }
+            }
+            if (cnt > 0 && cnt < sample_num) {
+                int k = indicesGm.GetValue(i * sample_num + cnt - 1);
+                while (cnt < sample_num) {
+                    indicesGm.SetValue(i * sample_num + cnt, k);
+                    cnt += 1;
                 }
             }
         }
