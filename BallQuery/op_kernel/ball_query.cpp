@@ -96,8 +96,8 @@ public:
             int cnt = 0;
             for (int j = 0; j < n; ++j) {
                 float x = pointsGm.GetValue((xyz_offset + j) * 3 + 0);
-                float y = pointsGm.GetValue((xyz_offset + j) * 3 + 0);
-                float z = pointsGm.GetValue((xyz_offset + j) * 3 + 0);
+                float y = pointsGm.GetValue((xyz_offset + j) * 3 + 1);
+                float z = pointsGm.GetValue((xyz_offset + j) * 3 + 2);
                 float dis = (new_x - x) * (new_x - x) + (new_y - y) * (new_y - y) + (new_z - z) * (new_z - z);
                 if (dis < radius2) {
                     if (cnt == 0) {
