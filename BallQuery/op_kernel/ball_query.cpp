@@ -44,18 +44,6 @@ public:
     }
     __aicore__ inline void Process()
     {
-        uint32_t sz1[1000], sz2[1000];
-        uint32_t sum2[1000];
-        if constexpr (opType == 1){
-            for(int i=0;i<this->bs;i++){
-                sz1[i] = sz1Gm.GetValue(i);
-                sz2[i] = sz2Gm.GetValue(i);
-            }
-            sum2[0] = 0;
-            for(int i=1;i<this->bs;i++){
-                sum2[i] = sum2[i - 1] + sz2[i - 1];
-            }
-        }
         uint32_t N = this->totalLength / this->bs / 3;
         uint32_t N2 = this->totalLength2 / this->bs / 3;
         auto min_radius = this->min_radius * this->min_radius;
@@ -69,8 +57,9 @@ public:
             if constexpr (opType == 1){
                 uint32_t s = i;
                 b = 0;
-                while(b < this->bs && s >= sz1[b]){
-                    s -= sz1[b++];
+                while(b < this->bs && s >= sz1Gm.GetValue(b)){
+                    s -= sz1Gm.GetValue(b);
+                    b++;
                 }
                 if(b == this->bs){
                     zGm.SetValue(st - zstartPointer, -1);
@@ -86,11 +75,13 @@ public:
             float x = xGm.GetValue(i * 3 - this->startPointer);
             float y = xGm.GetValue(i * 3 + 1 - this->startPointer);
             float z = xGm.GetValue(i * 3 + 2 - this->startPointer);
-            uint32_t st2;
-            uint32_t ed2;
+            uint32_t st2 = 0;
+            uint32_t ed2 = 0;
             if constexpr (opType == 1){
-                st2 = sum2[b];
-                ed2 = sum2[b] + sz2[b];
+                for(int j=0;j<b;j++){
+                    st2 += sz2Gm.GetValue(j);
+                }
+                ed2 = st2 + sz2Gm.GetValue(b);
             }else{
                 st2 = b * N2;
                 ed2 = b * N2 + N2;
