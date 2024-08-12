@@ -97,6 +97,7 @@ public:
                     zGm.SetValue(st + cnt - zstartPointer, n);
                     lst = n;
                     cnt++;
+                    break;
                     if(cnt == this->sample_num) break;
                 }
             }
