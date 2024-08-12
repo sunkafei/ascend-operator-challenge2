@@ -42,6 +42,9 @@ public:
         // pipe.InitBuffer(inQueueX, BUFFER_NUM, this->tileLength * sizeof(T));
         pipe.InitBuffer(outQueueZ, BUFFER_NUM, this->tileLength * sizeof(uint32_t));
     }
+    __aicore__ inline float sqr(float x){
+        return x * x;
+    }
     __aicore__ inline void Process()
     {
         uint32_t N = this->totalLength / this->bs / 3;
@@ -92,7 +95,7 @@ public:
                 float a = yGm.GetValue(j * 3);
                 float b = yGm.GetValue(j * 3 + 1);
                 float c = yGm.GetValue(j * 3 + 2);
-                float tmp = (x - a) * (x - a) + (y - b) * (y - b) + (z - c) * (z - c);
+                float tmp = sqr(x - a) + sqr(y - b) + sqr(z - c);
                 if(tmp == 0 || (min_radius <= tmp && tmp < max_radius)){
                     zGm.SetValue(st + cnt, n);
                     lst = n;
