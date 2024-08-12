@@ -51,6 +51,7 @@ function main {
     
     # rm ./input/*.bin
     rm -rf ./output/output*.bin > /dev/null
+    rm -rf ./output/PROF* > /dev/null
 
     # 2. 生成或复用输入数据和真值数据 
     if [ -d "./input" ]; then
@@ -74,9 +75,9 @@ function main {
     echo "INFO: generate input data success!"
 
     # 3. 编译或复用acl可执行文件
-    if [ -e "./output/execute_op" ]; then
-        echo "可执行存在"
-    else
+    #if [ -e "./output/execute_op" ]; then
+    #    echo "可执行存在"
+    #else
         echo "可执行不存在"
         cd $CURRENT_DIR; rm -rf build; mkdir -p build; cd build
         cmake ../src
@@ -91,7 +92,7 @@ function main {
             return 1
         fi
         echo "INFO: make success!"
-    fi
+    #fi
 
     # 4. 运行可执行文件
     cd $CURRENT_DIR/output
