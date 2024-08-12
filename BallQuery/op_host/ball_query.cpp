@@ -9,6 +9,22 @@ const uint32_t BLOCK_SIZE = 32;
 static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     BallQueryTilingData tiling;
 
+    auto ascendcPlatform = platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
+    auto num_cores = 1;
+    int32_t sizeofdatatype;
+    auto dt = context->GetInputTensor(0)->GetDataType();
+    if (dt == ge::DT_FLOAT16 || dt == ge::DT_BF16) {
+        sizeofdatatype = 2;
+    }
+    else {
+        sizeofdatatype = 4;
+    }
+    auto min_radius = *context->GetAttrs()->GetFloat(0);
+    tiling.set_min_radius(min_radius);
+    auto max_radius = *context->GetAttrs()->GetFloat(1);
+    tiling.set_max_radius(max_radius);
+    auto sample_num = *context->GetAttrs()->GetInt(2);
+    tiling.set_sample_num(sample_num);
     int32_t type = 0;
     auto batch_size = context->GetInputShape(0)->GetStorageShape().GetDim(0);
     auto num_points = context->GetInputShape(0)->GetStorageShape().GetDim(1);
@@ -22,17 +38,16 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
             abort(); //todo
         }
     }
+    else if (num_points * sizeofdatatype % 64 == 0) {
+        type = -1;
+        num_cores = ascendcPlatform.GetCoreNum();
+    }
     tiling.set_type(type);
     tiling.set_batch_size(batch_size);
     tiling.set_num_points(num_points);
     tiling.set_num_centers(num_centers);
-    auto min_radius = *context->GetAttrs()->GetFloat(0);
-    tiling.set_min_radius(min_radius);
-    auto max_radius = *context->GetAttrs()->GetFloat(1);
-    tiling.set_max_radius(max_radius);
-    auto sample_num = *context->GetAttrs()->GetInt(2);
-    tiling.set_sample_num(sample_num);
 
+    std::cerr << "type: " << type << std::endl;
     std::cerr << "batch_size: " << batch_size << std::endl;
     std::cerr << "num_points: " << num_points << std::endl;
     std::cerr << "num_centers: " << num_centers << std::endl;
@@ -41,7 +56,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     std::cerr << "sample_num: " << sample_num << std::endl;
 
 
-    context->SetBlockDim(1);
+    context->SetBlockDim(num_cores);
     tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());
     context->GetRawTilingData()->SetDataSize(tiling.GetDataSize());
     return ge::GRAPH_SUCCESS;
