@@ -54,6 +54,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     std::cerr << "min_radius: " << min_radius << std::endl;
     std::cerr << "max_radius: " << max_radius << std::endl;
     std::cerr << "sample_num: " << sample_num << std::endl;
+    std::cerr << "num_cores: " << num_cores << std::endl;
 
 
     context->SetBlockDim(num_cores);
