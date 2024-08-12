@@ -44,8 +44,8 @@ public:
     }
     __aicore__ inline void Process()
     {
-        uint32_t sz1[100], sz2[100];
-        uint32_t sum2[100];
+        uint32_t sz1[1000], sz2[1000];
+        uint32_t sum2[1000];
         if constexpr (opType == 1){
             for(int i=0;i<this->bs;i++){
                 sz1[i] = sz1Gm.GetValue(i);
