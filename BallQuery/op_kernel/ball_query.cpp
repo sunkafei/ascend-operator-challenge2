@@ -51,7 +51,7 @@ public:
         auto max_radius = this->max_radius * this->max_radius;
         auto sample_num = this->sample_num;
         auto zstartPointer = this->startPointer / 3 * this->sample_num;
-        uint32_t st = this->st * this->sample_num;
+        uint32_t st = this->st * this->sample_num - zstartPointer;
         for(uint32_t i=this->st;i<this->ed;i++){
             uint32_t b;
             if constexpr (opType == 1){
@@ -62,9 +62,9 @@ public:
                     b++;
                 }
                 if(b == this->bs){
-                    zGm.SetValue(st - zstartPointer, -1);
+                    zGm.SetValue(st, -1);
                     for(int k=1;k<this->sample_num;k++){
-                        zGm.SetValue(st + k - zstartPointer, 0);
+                        zGm.SetValue(st + k, 0);
                     }
                     st += this->sample_num;
                     continue;
@@ -84,7 +84,7 @@ public:
                 ed2 = st2 + sz2Gm.GetValue(b);
             }else{
                 st2 = b * N2;
-                ed2 = b * N2 + N2;
+                ed2 = st2 + N2;
             }
             uint32_t cnt = 0;
             uint32_t lst = 0;
@@ -94,16 +94,15 @@ public:
                 float c = yGm.GetValue(j * 3 + 2);
                 float tmp = (x - a) * (x - a) + (y - b) * (y - b) + (z - c) * (z - c);
                 if(tmp == 0 || (min_radius <= tmp && tmp < max_radius)){
-                    zGm.SetValue(st + cnt - zstartPointer, n);
+                    zGm.SetValue(st + cnt, n);
                     lst = n;
                     cnt++;
-                    break;
                     if(cnt == this->sample_num) break;
                 }
             }
             if(cnt != this->sample_num){
                 for(int k=cnt;k<this->sample_num;k++){
-                    zGm.SetValue(st + k - zstartPointer, lst);
+                    zGm.SetValue(st + k, lst);
                 }
             }
             st += this->sample_num;
