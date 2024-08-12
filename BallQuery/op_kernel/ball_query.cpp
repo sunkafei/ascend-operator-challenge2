@@ -30,7 +30,7 @@ public:
         // get start index for current core, core parallel
         xGm.SetGlobalBuffer((__gm__ T*)x + startPointer, totalLength);
         yGm.SetGlobalBuffer((__gm__ T*)y, totalLength2);
-        zGm.SetGlobalBuffer((__gm__ uint32_t*)z + startPointer / 3 * this->sample_num, bufferlength);
+        zGm.SetGlobalBuffer((__gm__ uint32_t*)z + startPointer / 3 * this->sample_num, (this->ed-this->st)*this->sample_num);
         if constexpr (opType == 1){
             sz1Gm.SetGlobalBuffer((__gm__ uint32_t*)sz1, bs);
             sz2Gm.SetGlobalBuffer((__gm__ uint32_t*)sz2, bs);
