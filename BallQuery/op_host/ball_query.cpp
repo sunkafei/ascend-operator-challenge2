@@ -53,10 +53,14 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     uint32_t block_size = tiling_size * ALIGN_NUM;
     aivNum = (aivNum < totalLength / block_size) ? aivNum : (totalLength / block_size);
     aivNum = aivNum >= 1 ? aivNum : 1;
-    //aivNum = 1;
+    aivNum = 40;
 
-    uint32_t core_size = (totalLength / aivNum) / (ALIGN_NUM * 24) * (ALIGN_NUM * 24);
+    // uint32_t core_size = (totalLength / aivNum) / (ALIGN_NUM * 24) * (ALIGN_NUM * 24);
+    uint32_t core_size = (totalLength / aivNum + (ALIGN_NUM * 24) - 1) / (ALIGN_NUM * 24) * (ALIGN_NUM * 24);
+    aivNum = (totalLength + core_size - 1) / core_size;
     uint32_t core_remain = totalLength - aivNum * core_size;
+
+    // std::cout << aivNum << " " << core_size << " " << core_remain << " " << core_size + core_remain << std::endl;
 
     tiling.set_totalLength(totalLength);
     tiling.set_totalLength2(totalLength2);
