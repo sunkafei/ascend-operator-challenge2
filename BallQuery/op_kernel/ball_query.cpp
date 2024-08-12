@@ -145,7 +145,7 @@ public:
         centerGm.SetGlobalBuffer((__gm__ T*)center, batch_size * num_centers * 3);
         indicesGm.SetGlobalBuffer((__gm__ int32_t*)indices, batch_size * num_centers * sample_num);
     }
-    __aicore__ inline void Process() { // 8350
+    __aicore__ inline void Process() { // 8733
         for (int i = L; i < R; ++i) {
             float center_x = centerGm.GetValue(i * 3 + 0);
             float center_y = centerGm.GetValue(i * 3 + 1);
