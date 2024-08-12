@@ -83,14 +83,18 @@ private:
             auto mul4 = this->shape[2] * this->shape[3];
             auto mul5 = this->shape[3];
             for(uint32_t i=st;i<ed;i++){
-                auto b = i / div1;
-                auto c = i / div2 % C;
+                // auto b = i / div1;
+                // auto c = i / div2 % C;
                 auto h = i / div3 % this->shape[2];
                 auto x = i / div4 % this->bs;
                 auto w = i / div5 % this->shape[3];
                 auto y = i % this->bs;
 
-                zLocal.SetValue(i - st, xGm.GetValue(b * mul1 + x * mul2 + y * mul3 + c * mul4 + h * mul5 + w));
+                auto b = i / div1 * mul1;
+                auto c = (i - b) / div2;
+
+                zLocal.SetValue(i - st, xGm.GetValue(b + x * mul2 + y * mul3 + c * mul4 + h * mul5 + w));
+                // zLocal.SetValue(i - st, xGm.GetValue(b * mul1 + x * mul2 + y * mul3 + c * mul4 + h * mul5 + w));
             }
         }else if constexpr (opType == 1){
             auto C = this->shape[1] / this->bs / this->bs;
@@ -106,14 +110,19 @@ private:
             auto mul4 = this->shape[2] * this->shape[3];
             auto mul5 = this->shape[3];
             for(uint32_t i=st;i<ed;i++){
-                auto b = i / div1;
-                auto c = i / div2 % C;
-                auto h = i / div3 % this->shape[2];
+                // auto b = i / div1;
+                // auto c = i / div2 % C;
+                // auto h = i / div3 % this->shape[2];
                 auto x = i / div4 % this->bs;
                 auto w = i / div5 % this->shape[3];
                 auto y = i % this->bs;
 
-                zLocal.SetValue(i - st, xGm.GetValue(b * mul1 + c * mul2 + x * mul3 + y * mul4 + h * mul5 + w));
+                
+                auto c = i / div2 * mul2;
+                auto h = (i - c) / div3;
+
+                zLocal.SetValue(i - st, xGm.GetValue(c + x * mul3 + y * mul4 + h * mul5 + w));
+                // zLocal.SetValue(i - st, xGm.GetValue(b * mul1 + c * mul2 + x * mul3 + y * mul4 + h * mul5 + w));
             }
         }else if constexpr (opType == 2){
             auto C = this->shape[3] / this->bs / this->bs;
@@ -129,14 +138,18 @@ private:
             auto mul4 = C * this->bs;
             auto mul5 = C;
             for(uint32_t i=st;i<ed;i++){
-                auto b = i / div1;
-                auto h = i / div2 % this->shape[1];
-                auto x = i / div3 % this->bs;
+                // auto b = i / div1;
+                // auto h = i / div2 % this->shape[1];
+                // auto x = i / div3 % this->bs;
                 auto w = i / div4 % this->shape[2];
                 auto y = i / div5 % this->bs;
                 auto c = i % div5;
 
-                zLocal.SetValue(i - st, xGm.GetValue(b * mul1 + h * mul2 + w * mul3 + x * mul4 + y * mul5 + c));
+                auto h = i / div2 * mul2;
+                auto x = (i - h) / div3;
+
+                zLocal.SetValue(i - st, xGm.GetValue(h + w * mul3 + x * mul4 + y * mul5 + c));
+                // zLocal.SetValue(i - st, xGm.GetValue(b * mul1 + h * mul2 + w * mul3 + x * mul4 + y * mul5 + c));
             }
         }else if constexpr (opType == 3){
             auto C = this->shape[3] / this->bs / this->bs;
@@ -152,14 +165,18 @@ private:
             auto mul4 = this->bs * this->bs;
             auto mul5 = this->bs;
             for(uint32_t i=st;i<ed;i++){
-                auto b = i / div1;
-                auto h = i / div2 % this->shape[1];
-                auto x = i / div3 % this->bs;
+                // auto b = i / div1;
+                // auto h = i / div2 % this->shape[1];
+                // auto x = i / div3 % this->bs;
                 auto w = i / div4 % this->shape[2];
                 auto y = i / div5 % this->bs;
                 auto c = i % div5;
 
-                zLocal.SetValue(i - st, xGm.GetValue(b * mul1 + h * mul2 + w * mul3 + c * mul4 + x * mul5 + y));
+                auto h = i / div2 * mul2;
+                auto x = (i - h) / div3;
+
+                zLocal.SetValue(i - st, xGm.GetValue(h + w * mul3 + c * mul4 + x * mul5 + y));
+                // zLocal.SetValue(i - st, xGm.GetValue(b * mul1 + h * mul2 + w * mul3 + c * mul4 + x * mul5 + y));
             }
         }
 
