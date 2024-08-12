@@ -9,18 +9,22 @@ const uint32_t BLOCK_SIZE = 32;
 static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     BallQueryTilingData tiling;
 
-    if (context->GetInputTensor(2) == nullptr) {
-        tiling.set_type(0);
-    }
-    else {
-        abort();
-        tiling.set_type(1);
-    }
+    int32_t type = 0;
     auto batch_size = context->GetInputShape(0)->GetStorageShape().GetDim(0);
-    tiling.set_batch_size(batch_size);
     auto num_points = context->GetInputShape(0)->GetStorageShape().GetDim(1);
-    tiling.set_num_points(num_points);
     auto num_centers = context->GetInputShape(1)->GetStorageShape().GetDim(1);
+    if (context->GetInputTensor(2) != nullptr) {
+        type = 1;
+        batch_size = context->GetInputShape(2)->GetStorageShape().GetDim(0);
+        num_points = context->GetInputShape(0)->GetStorageShape().GetDim(0);
+        num_centers = context->GetInputShape(1)->GetStorageShape().GetDim(0);
+        if (context->GetInputShape(2)->GetStorageShape().GetDim(0) != context->GetInputShape(3)->GetStorageShape().GetDim(0)) {
+            abort(); //todo
+        }
+    }
+    tiling.set_type(type);
+    tiling.set_batch_size(batch_size);
+    tiling.set_num_points(num_points);
     tiling.set_num_centers(num_centers);
     auto min_radius = *context->GetAttrs()->GetFloat(0);
     tiling.set_min_radius(min_radius);

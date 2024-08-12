@@ -53,6 +53,75 @@ private:
     float min_radius, max_radius;
     int32_t sample_num, batch_size, num_points, num_centers;
 };
+template<typename T> class BruteForceStack {
+public:
+    __aicore__ inline BruteForceStack() {}
+    __aicore__ inline void Init(GM_ADDR center, GM_ADDR points, GM_ADDR center_batch_cnt, GM_ADDR points_batch_cnt, GM_ADDR indices, float min_radius, float max_radius, int32_t sample_num, int32_t batch_size, int32_t num_points, int32_t num_centers) {
+        ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
+        this->min_radius = min_radius;
+        this->max_radius = max_radius;
+        this->sample_num = sample_num;
+        this->batch_size = batch_size;
+
+        pointsGm.SetGlobalBuffer((__gm__ T*)points, num_points * 3);
+        centerGm.SetGlobalBuffer((__gm__ T*)center, num_centers * 3);
+        indicesGm.SetGlobalBuffer((__gm__ int32_t*)indices, num_centers * sample_num);
+        center_batch_cntGm.SetGlobalBuffer((__gm__ int32_t*)center_batch_cnt, batch_size);
+        points_batch_cntGm.SetGlobalBuffer((__gm__ int32_t*)points_batch_cnt, batch_size);
+    }
+    __aicore__ inline void Process() {
+        auto radius2 = max_radius * max_radius;
+        // center_xyz_length = num_centers
+        for (int i = 0; i < num_centers; ++i) {
+            int current_b_idx = 0;
+            int tmp_b = 0;
+            for (int _b = 0; _b < batch_size; ++_b) {
+                tmp_b += center_batch_cntGm.GetValue(_b);
+                if (tmp_b > i) {
+                    current_b_idx = _b;
+                    break;
+                }
+            }
+            float new_x = centerGm.GetValue(i * num_centers + 0);
+            float new_y = centerGm.GetValue(i * num_centers + 1);
+            float new_z = centerGm.GetValue(i * num_centers + 2);
+            int n = points_batch_cntGm.GetValue(current_b_idx);
+
+            int xyz_offset = 0;
+
+            for (int _t = 0; _t < current_b_idx; ++_t) {
+                xyz_offset += points_batch_cntGm.GetValue(_t);
+            }
+
+            int cnt = 0;
+            for (int j = 0; j < n; ++j) {
+                float x = pointsGm.GetValue((xyz_offset + j) * 3 + 0);
+                float y = pointsGm.GetValue((xyz_offset + j) * 3 + 0);
+                float z = pointsGm.GetValue((xyz_offset + j) * 3 + 0);
+                float dis = (new_x - x) * (new_x - x) + (new_y - y) * (new_y - y) + (new_z - z) * (new_z - z);
+                if (dis < radius2) {
+                    if (cnt == 0) {
+                        for (int f = 0; f < sample_num; ++f) {
+                            indicesGm.SetValue(i * sample_num + f, j);
+                        }
+                    }
+                    indicesGm.SetValue(i * sample_num + cnt, j);
+                    cnt += 1;
+                    if (cnt >= sample_num) {
+                        break;
+                    }
+                }
+            }
+        }
+        DataCacheCleanAndInvalid<int32_t, CacheLine::ENTIRE_DATA_CACHE>(indicesGm);
+    }
+
+private:
+    GlobalTensor<T> pointsGm, centerGm;
+    GlobalTensor<int32_t> indicesGm, center_batch_cntGm, points_batch_cntGm;
+    float min_radius, max_radius;
+    int32_t sample_num, batch_size, num_points, num_centers;
+};
 
 extern "C" __global__ __aicore__ void ball_query(GM_ADDR xyz, GM_ADDR center_xyz, GM_ADDR xyz_batch_cnt, GM_ADDR center_xyz_batch, GM_ADDR idx, GM_ADDR workspace, GM_ADDR tiling) {
     GET_TILING_DATA(tiling_data, tiling);
@@ -61,9 +130,9 @@ extern "C" __global__ __aicore__ void ball_query(GM_ADDR xyz, GM_ADDR center_xyz
         op.Init(center_xyz, xyz, idx, tiling_data.min_radius, tiling_data.max_radius, tiling_data.sample_num, tiling_data.batch_size, tiling_data.num_points, tiling_data.num_centers);
         op.Process();
     }
-    /*else if (tiling_data.type == 1) {
-        BruteForce<DTYPE_XYZ, 1> op;
-        op.Init(center_xyz, xyz, center_xyz_batch, xyz_batch_cnt, idx, tiling_data.min_radius, tiling_data.max_radius, tiling_data.sample_num);
+    else if (tiling_data.type == 1) {
+        BruteForceStack<DTYPE_XYZ> op;
+        op.Init(center_xyz, xyz, center_xyz_batch, xyz_batch_cnt, idx, tiling_data.min_radius, tiling_data.max_radius, tiling_data.sample_num, tiling_data.batch_size, tiling_data.num_points, tiling_data.num_centers);
         op.Process();
-    }*/
+    }
 }
