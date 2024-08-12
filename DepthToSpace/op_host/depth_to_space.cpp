@@ -59,8 +59,11 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     aivNum = (aivNum < totalLength / block_size) ? aivNum : (totalLength / block_size);
     aivNum = aivNum >= 1 ? aivNum : 1;
     // aivNum = 1;
+    aivNum = ascendcPlatform.GetCoreNum();
 
-    uint32_t core_size = (totalLength / aivNum) / (ALIGN_NUM * 8) * (ALIGN_NUM * 8);
+    // uint32_t core_size = (totalLength / aivNum) / (ALIGN_NUM * 8) * (ALIGN_NUM * 8);
+    uint32_t core_size = (totalLength / aivNum + (ALIGN_NUM * 8) - 1) / (ALIGN_NUM * 8) * (ALIGN_NUM * 8);
+    aivNum = (totalLength + core_size - 1) / core_size;
     uint32_t core_remain = totalLength - aivNum * core_size;
 
     tiling.set_totalLength(totalLength);
