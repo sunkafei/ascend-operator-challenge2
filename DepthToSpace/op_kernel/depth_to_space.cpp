@@ -142,13 +142,14 @@ private:
                 // auto h = i / div2 % this->shape[1];
                 // auto x = i / div3 % this->bs;
                 auto w = i / div4 % this->shape[2];
-                auto y = i / div5 % this->bs;
-                auto c = i % div5;
+                // auto y = i / div5 % this->bs;
+                // auto c = i % div5;
 
                 auto h = i / div2 * mul2;
                 auto x = (i - h) / div3;
+                auto y = i % div4;
 
-                zLocal.SetValue(i - st, xGm.GetValue(h + w * mul3 + x * mul4 + y * mul5 + c));
+                zLocal.SetValue(i - st, xGm.GetValue(h + w * mul3 + x * mul4 + y));
                 // zLocal.SetValue(i - st, xGm.GetValue(b * mul1 + h * mul2 + w * mul3 + x * mul4 + y * mul5 + c));
             }
         }else if constexpr (opType == 3){
