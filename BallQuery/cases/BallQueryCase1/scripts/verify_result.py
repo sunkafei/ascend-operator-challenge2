@@ -27,6 +27,8 @@ def verify_result(real_result, golden):
         print("test pass")
         return True
     else:
+        print("golden:", golden[0], file=sys.stderr)
+        print("output:", real_result[0], file=sys.stderr)
         print("[ERROR] result error")
         return False
 
