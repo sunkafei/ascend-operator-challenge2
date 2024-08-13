@@ -1,12 +1,12 @@
 #include "kernel_operator.h"
 using namespace AscendC;
-template<typename T> __aicore__ inline void Reduce(const LocalTensor<T> &y, const LocalTensor<T> &x, uint32_t group_size) {
-    Sum(y, x, SumParams{1, group_size, group_size});
+template<typename T> __aicore__ inline void Reduce(const LocalTensor<T> &y, const LocalTensor<T> &x, const LocalTensor<uint8_t> &temp, uint32_t group_size) {
+    Sum(y, x, temp, SumParams{1, group_size, group_size});
 }
 template<typename T> class GroupNormV2Kernal {
 public:
     __aicore__ inline GroupNormV2Kernal() {}
-    __aicore__ inline void Init(GM_ADDR x, GM_ADDR gamma, GM_ADDR beta, GM_ADDR y, GM_ADDR mean, GM_ADDR rstd, int32_t tile_length, int32_t span, int32_t chunk_size, int32_t batch_size, int32_t num_groups, int32_t num_channels, int32_t total_size, float epsilon) {
+    __aicore__ inline void Init(GM_ADDR x, GM_ADDR gamma, GM_ADDR beta, GM_ADDR y, GM_ADDR mean, GM_ADDR rstd, int32_t temp_length, int32_t tile_length, int32_t span, int32_t chunk_size, int32_t batch_size, int32_t num_groups, int32_t num_channels, int32_t total_size, float epsilon) {
         ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
         this->chunk_size = chunk_size;
         this->batch_size = batch_size;
@@ -21,6 +21,7 @@ public:
         }
         this->block_size = num_channels / num_groups;
         this->tile_length = tile_length;
+        this->temp_length = temp_length;
         this->data_copy_size = (sizeof(T) * batch_size * num_groups + 31) & ~31;
         this->group_size = total_size / batch_size / num_groups;
         this->channel_size = total_size / batch_size / num_channels;
@@ -36,8 +37,10 @@ public:
         pipe.InitBuffer(Q_y, 2, sizeof(T) * tile_length);
         pipe.InitBuffer(Q_buf, 1, data_copy_size);
         pipe.InitBuffer(B_sumv, data_copy_size);
+        pipe.InitBuffer(B_temp, temp_length);
     }
     __aicore__ inline void Process() { // 6849
+        auto temp = B_temp.Get<uint8_t>();
         auto sumv = B_sumv.Get<T>();
         auto buf = Q_buf.AllocTensor<T>();
         Duplicate(buf, T(0), data_copy_size);
@@ -57,7 +60,7 @@ public:
             }
             {
                 LocalTensor<T> x = Q_x.DeQue<T>();
-                Reduce(sumv, x, tile_length);
+                Reduce(sumv, x, temp, tile_length);
                 sum += (float)sumv.GetValue(0);
                 Q_x.FreeTensor(x);
             }
@@ -90,7 +93,7 @@ public:
                 LocalTensor<T> x = Q_x.DeQue<T>();
                 Adds(x, x, T(-avg), tile_length);
                 Mul(x, x, x, tile_length);
-                Reduce(sumv, x, tile_length);
+                Reduce(sumv, x, temp, tile_length);
                 sum += (float)sumv.GetValue(0) / group_size;
                 Q_x.FreeTensor(x);
             }
@@ -146,14 +149,14 @@ public:
 private:
     GlobalTensor<T> Gm_x, Gm_gamma, Gm_beta, Gm_y, Gm_mean, Gm_rstd;
     int32_t L, R, block_size, chunk_size, batch_size, num_groups, num_channels, total_size;
-    int32_t tile_length, data_copy_size, group_size, channel_size;
+    int32_t temp_length, tile_length, data_copy_size, group_size, channel_size;
     int32_t group_tiles;
     float epsilon;
     TPipe pipe;
     TQue<QuePosition::VECIN, 2> Q_x;
     TQue<QuePosition::VECOUT, 2> Q_y;
     TQue<QuePosition::VECOUT, 1> Q_buf;
-    TBuf<QuePosition::VECCALC> B_sumv;
+    TBuf<QuePosition::VECCALC> B_sumv, B_temp;
 };
 template<typename T> class BruteForce {
 public:
@@ -232,7 +235,7 @@ extern "C" __global__ __aicore__ void group_norm_v2(GM_ADDR x, GM_ADDR gamma, GM
     }
     else {
         GroupNormV2Kernal<DTYPE_X> op;
-        op.Init(x, gamma, beta, y, mean, rstd, tiling_data.tile_length, tiling_data.span, tiling_data.chunk_size, tiling_data.batch_size, tiling_data.num_groups, tiling_data.num_channels, tiling_data.total_size, tiling_data.epsilon);
+        op.Init(x, gamma, beta, y, mean, rstd, tiling_data.temp_length, tiling_data.tile_length, tiling_data.span, tiling_data.chunk_size, tiling_data.batch_size, tiling_data.num_groups, tiling_data.num_channels, tiling_data.total_size, tiling_data.epsilon);
         op.Process();
     }
 }
