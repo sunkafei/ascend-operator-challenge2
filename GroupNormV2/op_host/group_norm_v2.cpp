@@ -39,8 +39,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     if (total_size / batch_size / num_groups % (64 / sizeofdatatype) != 0) {
         num_cores = 1;
     }
-    auto span = (batch_size * num_channels - 1) / num_cores + 1;
-    tiling.set_span(span);
 
     const auto length = total_size / batch_size / num_channels;
     auto tile_length = -1;
@@ -60,10 +58,15 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
             break;
         }
     }
+    auto span = (total_size / tile_length - 1) / num_cores + 1;
     if (sizeofdatatype == 2) { // todo:提升fp16的处理精度
         tile_length = -1;
     }
+    if (tile_length == -1) {
+        span = (batch_size * num_groups - 1) / num_cores + 1;
+    }
     tiling.set_tile_length(tile_length);
+    tiling.set_span(span);
 
     context->SetBlockDim(num_cores);
     tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());
@@ -79,7 +82,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     std::cerr << "num_cores: " << num_cores << std::endl;
     std::cerr << "span: " << span << std::endl;
     std::cerr << "tile_length: " << tile_length << std::endl;
-    std::cerr << "splits: " << length / tile_length << std::endl;
 
     size_t usrSize = 1024 * 1024 * 40; // 设置用户需要使用的workspace大小。
     // 如需要使用系统workspace需要调用GetLibApiWorkSpaceSize获取系统workspace的大小。

@@ -21,15 +21,14 @@ public:
         this->epsilon = epsilon;
         this->L = GetBlockIdx() * span;
         this->R = (GetBlockIdx() + 1) * span;
-        if (this->R > batch_size * num_channels) {
-            this->R = batch_size * num_channels;
+        if (this->R > total_size / tile_length) {
+            this->R = total_size / tile_length;
         }
         this->block_size = num_channels / num_groups;
-        this->length = total_size / batch_size / num_channels;
         this->tile_length = tile_length;
-        this->splits = length / tile_length;
         this->data_copy_size = (sizeof(T) * batch_size * num_groups + 31) & ~31;
         this->group_size = total_size / batch_size / num_groups;
+        this->channel_size = total_size / batch_size / num_channels;
 
         Gm_x.SetGlobalBuffer((__gm__ T*)x, total_size);
         Gm_gamma.SetGlobalBuffer((__gm__ T*)gamma, num_channels);
@@ -43,24 +42,22 @@ public:
     }
     __aicore__ inline void Process() {
         auto buf = Q_buf.AllocTensor<T>();
-        Duplicate(buf, T(0), batch_size * num_groups);
-        for (int i = L; i < R; ++i) {
+        Duplicate(buf, T(0), data_copy_size);
+        for (int32_t i = L; i < R; ++i) {
             float mean = 0;
-            for (int j = 0; j < splits; ++j) {
-                {
-                    LocalTensor<T> x = Q_x.AllocTensor<T>();
-                    DataCopy(x, Gm_x[i * length + j * tile_length], tile_length);
-                    Q_x.EnQue(x);
-                }
-                {
-                    LocalTensor<T> x = Q_x.DeQue<T>();
-                    Reduce(x, tile_length);
-                    mean += (float)x.GetValue(0);
-                    Q_x.FreeTensor(x);
-                }
+            {
+                LocalTensor<T> x = Q_x.AllocTensor<T>();
+                DataCopy(x, Gm_x[i * tile_length], tile_length);
+                Q_x.EnQue(x);
+            }
+            {
+                LocalTensor<T> x = Q_x.DeQue<T>();
+                Reduce(x, tile_length);
+                mean += (float)x.GetValue(0);
+                Q_x.FreeTensor(x);
             }
             mean = mean / group_size;
-            auto index = i / num_channels * num_groups + i % num_channels / block_size;
+            auto index = i * tile_length / group_size;
             buf.SetValue(index, (float)buf.GetValue(index) + mean);
         }
         SetAtomicAdd<T>();
@@ -68,26 +65,24 @@ public:
         Q_buf.FreeTensor(buf);
 
         buf = Q_buf.AllocTensor<T>();
-        SyncAll(); //todo: <40?
-        Duplicate(buf, T(0), batch_size * num_groups);
+        SyncAll();
+        Duplicate(buf, T(0), data_copy_size);
         for (int i = L; i < R; ++i) {
-            auto index = i / num_channels * num_groups + i % num_channels / block_size;
+            auto index = i * tile_length / group_size;
             float avg = Gm_mean.GetValue(index);
             float rstd = 0;
-            for (int j = 0; j < splits; ++j) {
-                {
-                    LocalTensor<T> x = Q_x.AllocTensor<T>();
-                    DataCopy(x, Gm_x[i * length + j * tile_length], tile_length);
-                    Q_x.EnQue(x);
-                }
-                {
-                    LocalTensor<T> x = Q_x.DeQue<T>();
-                    Adds(x, x, T(-avg), tile_length);
-                    Mul(x, x, x, tile_length);
-                    Reduce(x, tile_length);
-                    rstd += (float)x.GetValue(0) / group_size;
-                    Q_x.FreeTensor(x);
-                }
+            {
+                LocalTensor<T> x = Q_x.AllocTensor<T>();
+                DataCopy(x, Gm_x[i * tile_length], tile_length);
+                Q_x.EnQue(x);
+            }
+            {
+                LocalTensor<T> x = Q_x.DeQue<T>();
+                Adds(x, x, T(-avg), tile_length);
+                Mul(x, x, x, tile_length);
+                Reduce(x, tile_length);
+                rstd += (float)x.GetValue(0) / group_size;
+                Q_x.FreeTensor(x);
             }
             buf.SetValue(index, (float)buf.GetValue(index) + rstd);
         }
@@ -95,38 +90,35 @@ public:
         Q_buf.FreeTensor(buf);
 
         buf = Q_buf.AllocTensor<T>();
-        SyncAll(); //todo: <40?
+        SyncAll();
         SetAtomicNone();
         DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(Gm_mean);
         DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(Gm_rstd);
         for (int i = L; i < R; ++i) {
-            auto index = i / num_channels * num_groups + i % num_channels / block_size;
+            auto index = i * tile_length / group_size;
             float avg = Gm_mean.GetValue(index);
             float var = sqrt((float)Gm_rstd.GetValue(index) + epsilon);
-
-            float gm = Gm_gamma.GetValue(i % num_channels);
-            float bt = Gm_beta.GetValue(i % num_channels);
+            float gm = Gm_gamma.GetValue(i * tile_length / channel_size % num_channels);
+            float bt = Gm_beta.GetValue(i * tile_length / channel_size % num_channels);
             float coef = gm / var;
-            for (int j = 0; j < splits; ++j) {
-                {
-                    LocalTensor<T> x = Q_x.AllocTensor<T>();
-                    DataCopy(x, Gm_x[i * length + j * tile_length], tile_length);
-                    Q_x.EnQue(x);
-                }
-                {
-                    LocalTensor<T> y = Q_y.AllocTensor<T>();
-                    LocalTensor<T> x = Q_x.DeQue<T>();
-                    Adds(x, x, T(-avg), tile_length);
-                    Muls(x, x, T(coef), tile_length);
-                    Adds(y, x, T(bt), tile_length);
-                    Q_y.EnQue<T>(y);
-                    Q_x.FreeTensor(x);
-                }
-                {
-                    LocalTensor<T> y = Q_y.DeQue<T>();
-                    DataCopy(Gm_y[i * length + j * tile_length], y, tile_length);
-                    Q_y.FreeTensor(y);
-                }
+            {
+                LocalTensor<T> x = Q_x.AllocTensor<T>();
+                DataCopy(x, Gm_x[i * tile_length], tile_length);
+                Q_x.EnQue(x);
+            }
+            {
+                LocalTensor<T> y = Q_y.AllocTensor<T>();
+                LocalTensor<T> x = Q_x.DeQue<T>();
+                Adds(x, x, T(-avg), tile_length);
+                Muls(x, x, T(coef), tile_length);
+                Adds(y, x, T(bt), tile_length);
+                Q_y.EnQue<T>(y);
+                Q_x.FreeTensor(x);
+            }
+            {
+                LocalTensor<T> y = Q_y.DeQue<T>();
+                DataCopy(Gm_y[i * tile_length], y, tile_length);
+                Q_y.FreeTensor(y);
             }
         }
         Q_buf.FreeTensor(buf);
@@ -134,7 +126,7 @@ public:
 private:
     GlobalTensor<T> Gm_x, Gm_gamma, Gm_beta, Gm_y, Gm_mean, Gm_rstd;
     int32_t L, R, block_size, chunk_size, batch_size, num_groups, num_channels, total_size;
-    int32_t length, tile_length, splits, data_copy_size, group_size;
+    int32_t tile_length, data_copy_size, group_size, channel_size;
     float epsilon;
     TPipe pipe;
     TQue<QuePosition::VECIN, 2> Q_x;
