@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# 先安装
+../../build_out/custom_opp_ubuntu_aarch64.run
+
 export ASCEND_SLOG_PRINT_TO_STDOUT=0
 export ASCEND_GLOBAL_LOG_LEVEL=0
 

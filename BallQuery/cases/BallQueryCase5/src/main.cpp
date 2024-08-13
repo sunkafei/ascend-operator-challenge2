@@ -24,32 +24,31 @@ int deviceId = 0;
 OperatorDesc CreateOpDesc()
 {
     // define operator
-    std::vector<int64_t> shape_x {2, 4, 1024, 1024};
-    std::vector<int64_t> shape_gamma_beta {4};
+    int64_t b = 224;
+    int64_t m = 224;
+    int64_t n = 224;
+    std::vector<int64_t> shape_xyz {b, n, 3};
+    std::vector<int64_t> shape_center_xyz {b, m, 3};
     
     aclDataType dataType = ACL_FLOAT;
+    aclDataType outType = ACL_INT32;
     aclFormat format = ACL_FORMAT_ND;
     OperatorDesc opDesc;
-    opDesc.numGroups = 1;
-    std::vector<int64_t> shape_mean_rstd {opDesc.numGroups};
-    opDesc.dataFormat = "NCHW";
-    opDesc.eps = 0.01;
-    opDesc.isTraining = true;
-    opDesc.AddInputTensorDesc(dataType, shape_x.size(), shape_x.data(), format);
-    opDesc.AddInputTensorDesc(dataType, shape_gamma_beta.size(), shape_gamma_beta.data(), format);
-    opDesc.AddInputTensorDesc(dataType, shape_gamma_beta.size(), shape_gamma_beta.data(), format);
-    opDesc.AddOutputTensorDesc(dataType, shape_x.size(), shape_x.data(), format);
-    opDesc.AddOutputTensorDesc(dataType, shape_mean_rstd.size(), shape_mean_rstd.data(), format);
-    opDesc.AddOutputTensorDesc(dataType, shape_mean_rstd.size(), shape_mean_rstd.data(), format);
+    opDesc.minRadius = 10;
+    opDesc.maxRadius= 50;
+    opDesc.sampleNum = 20;
+    std::vector<int64_t> shape_out {b, m, opDesc.sampleNum};
+    opDesc.AddInputTensorDesc(dataType, shape_xyz.size(), shape_xyz.data(), format);
+    opDesc.AddInputTensorDesc(dataType, shape_center_xyz.size(), shape_center_xyz.data(), format);
+    opDesc.AddOutputTensorDesc(outType, shape_out.size(), shape_out.data(), format);
     return opDesc;
 }
 
 bool SetInputData(OpRunner &runner)
 {
     size_t fileSize = 0;
-    ReadFile("../input/input_x.bin", fileSize, runner.GetInputBuffer<void>(0), runner.GetInputSize(0));
-    ReadFile("../input/input_gamma.bin", fileSize, runner.GetInputBuffer<void>(1), runner.GetInputSize(1));
-    ReadFile("../input/input_beta.bin", fileSize, runner.GetInputBuffer<void>(2), runner.GetInputSize(2));
+    ReadFile("../input/input_xyz.bin", fileSize, runner.GetInputBuffer<void>(0), runner.GetInputSize(0));
+    ReadFile("../input/center_xyz.bin", fileSize, runner.GetInputBuffer<void>(1), runner.GetInputSize(1));
     INFO_LOG("Set input success");
     return true;
 }
@@ -57,9 +56,6 @@ bool SetInputData(OpRunner &runner)
 bool ProcessOutputData(OpRunner &runner)
 {
     WriteFile("../output/output.bin", runner.GetOutputBuffer<void>(0), runner.GetOutputSize(0));
-    WriteFile("../output/mean.bin", runner.GetOutputBuffer<void>(1), runner.GetOutputSize(1));
-    WriteFile("../output/rstd.bin", runner.GetOutputBuffer<void>(2), runner.GetOutputSize(2));
-
     INFO_LOG("Write output success");
     return true;
 }

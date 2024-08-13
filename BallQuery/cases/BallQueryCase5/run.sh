@@ -51,6 +51,7 @@ function main {
     
     # rm ./input/*.bin
     rm -rf ./output/output*.bin > /dev/null
+    rm -rf ./output/PROF* > /dev/null
 
     # 2. 生成或复用输入数据和真值数据 
     if [ -d "./input" ]; then
@@ -74,9 +75,9 @@ function main {
     echo "INFO: generate input data success!"
 
     # 3. 编译或复用acl可执行文件
-    if [ -e "./output/execute_op" ]; then
-        echo "可执行存在"
-    else
+    #if [ -e "./output/execute_op" ]; then
+    #    echo "可执行存在"
+    #else
         echo "可执行不存在"
         cd $CURRENT_DIR; rm -rf build; mkdir -p build; cd build
         cmake ../src
@@ -91,18 +92,21 @@ function main {
             return 1
         fi
         echo "INFO: make success!"
-    fi
+    #fi
 
     # 4. 运行可执行文件
     cd $CURRENT_DIR/output
     echo "INFO: execute op!"
-    timeout 30 ./execute_op
+    msprof --application="execute_op" --output=./
 
     if [ $? -ne 0 ]; then
         echo "ERROR: acl executable run failed! please check your project!"
         return 1
     fi
     echo "INFO: acl executable run success!"
+    time_ust=$(awk -F, '{print $(NF-16)}' $(find ./ -name op_summary*.csv) | tail -n 1)
+    time_ust=$(printf "%.0f" $time_ust) 
+    echo $time_ust
 
     # 5. 比较真值文件
     cd $CURRENT_DIR

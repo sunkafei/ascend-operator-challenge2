@@ -6,9 +6,9 @@ loss = 1e-3 # 容忍偏差，一般fp16要求绝对误差和相对误差均不�
 
 
 def verify_result(real_result, golden):
-    b = 5
-    m = 64
-    sample_num = 17
+    b = 224
+    m = 224
+    sample_num = 20
     
     real_result = np.fromfile(real_result, dtype=np.int32) # 从bin文件读取实际运算结果
     golden = np.fromfile(golden, dtype=np.int32) # 从bin文件读取预期运算结果
@@ -27,8 +27,6 @@ def verify_result(real_result, golden):
         print("test pass")
         return True
     else:
-        print("golden:", golden[0], file=sys.stderr)
-        print("output:", real_result[0], file=sys.stderr)
         print("[ERROR] result error")
         return False
 
