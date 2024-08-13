@@ -1,12 +1,7 @@
 #include "kernel_operator.h"
 using namespace AscendC;
-template<typename T> __aicore__ inline void Reduce(const LocalTensor<T> &x, int32_t group_size) {
-    if (group_size * sizeof(T) > 256) {
-        const int number = 256 / sizeof(T);
-        group_size /= number;
-        WholeReduceSum(x, x, number, group_size, 1, 1, 8);
-    }
-    WholeReduceSum(x, x, group_size, 1, 1, 1, 8);
+template<typename T> __aicore__ inline void Reduce(const LocalTensor<T> &y, const LocalTensor<T> &x, uint32_t group_size) {
+    Sum(y, x, SumParams{1, group_size, group_size});
 }
 template<typename T> class GroupNormV2Kernal {
 public:
@@ -40,8 +35,10 @@ public:
         pipe.InitBuffer(Q_x, 2, sizeof(T) * tile_length);
         pipe.InitBuffer(Q_y, 2, sizeof(T) * tile_length);
         pipe.InitBuffer(Q_buf, 1, data_copy_size);
+        pipe.InitBuffer(B_sumv, data_copy_size);
     }
     __aicore__ inline void Process() { // 6849
+        auto sumv = B_sumv.Get<T>();
         auto buf = Q_buf.AllocTensor<T>();
         Duplicate(buf, T(0), data_copy_size);
         float sum = 0;
@@ -60,8 +57,8 @@ public:
             }
             {
                 LocalTensor<T> x = Q_x.DeQue<T>();
-                Reduce(x, tile_length);
-                sum += (float)x.GetValue(0);
+                Reduce(sumv, x, tile_length);
+                sum += (float)sumv.GetValue(0);
                 Q_x.FreeTensor(x);
             }
         }
@@ -93,8 +90,8 @@ public:
                 LocalTensor<T> x = Q_x.DeQue<T>();
                 Adds(x, x, T(-avg), tile_length);
                 Mul(x, x, x, tile_length);
-                Reduce(x, tile_length);
-                sum += (float)x.GetValue(0) / group_size;
+                Reduce(sumv, x, tile_length);
+                sum += (float)sumv.GetValue(0) / group_size;
                 Q_x.FreeTensor(x);
             }
         }
@@ -156,6 +153,7 @@ private:
     TQue<QuePosition::VECIN, 2> Q_x;
     TQue<QuePosition::VECOUT, 2> Q_y;
     TQue<QuePosition::VECOUT, 1> Q_buf;
+    TBuf<QuePosition::VECCALC> B_sumv;
 };
 template<typename T> class BruteForce {
 public:
