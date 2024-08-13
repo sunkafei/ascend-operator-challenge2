@@ -189,7 +189,6 @@ private:
             auto div4 = this->bit[3] - this->bit[4];
 
             auto mul3 = this->bit[3];
-            auto mul4 = C + this->bit[4];
             for(uint32_t i=st;i<ed;i++){
                 auto w = (i >> div4) & mod2;
 
@@ -197,45 +196,43 @@ private:
                 auto x = (i - h) >> div3;
                 auto y = i & mod4;
 
-                zLocal.SetValue(i - st, xGm.GetValue(h + (w << mul3) + (x << mul4) + y));
+                zLocal.SetValue(i - st, xGm.GetValue(h + (w << mul3) + (x << div4) + y));
             }
-        }/*else if constexpr (opType == 5){
+        }else if constexpr (opType == 5){
             auto C = this->shape[3] / this->bs / this->bs;
             auto div2 = this->shape[2] * this->shape[3];
             auto div3 = this->shape[2] * this->bs * C;
             auto div4 = this->bs * C;
+            auto mod2 = this->shape[2] - 1;
 
-            auto mul2 = this->shape[2] * this->shape[3];
             auto mul3 = this->shape[3];
-            auto mul4 = C * this->bs;
             for(uint32_t i=st;i<ed;i++){
-                auto w = i / div4 % this->shape[2];
+                auto w = (i / div4) & mod2;
 
-                auto h = i / div2 * mul2;
+                auto h = i / div2 * div2;
                 auto x = (i - h) / div3;
                 auto y = i % div4;
 
-                zLocal.SetValue(i - st, xGm.GetValue(h + w * mul3 + x * mul4 + y));
+                zLocal.SetValue(i - st, xGm.GetValue(h + w * mul3 + x * div4 + y));
             }
         }else if constexpr (opType == 6){
+            auto mod4 = this->shape[3] / this->bs - 1;
             auto C = this->shape[3] / this->bs / this->bs;
             auto div2 = this->shape[2] * this->shape[3];
             auto div3 = this->shape[2] * this->bs * C;
-            auto div4 = this->bs * C;
+            auto div4 = this->bit[3] - this->bit[4];
 
-            auto mul2 = this->shape[2] * this->shape[3];
-            auto mul3 = this->shape[3];
-            auto mul4 = C * this->bs;
+            auto mul3 = this->bit[3];
             for(uint32_t i=st;i<ed;i++){
-                auto w = i / div4 % this->shape[2];
+                auto w = (i >> div4) % this->shape[2];
 
-                auto h = i / div2 * mul2;
+                auto h = i / div2 * div2;
                 auto x = (i - h) / div3;
-                auto y = i % div4;
+                auto y = i & mod4;
 
-                zLocal.SetValue(i - st, xGm.GetValue(h + w * mul3 + x * mul4 + y));
+                zLocal.SetValue(i - st, xGm.GetValue(h + w * mul3 + (x << div4) + y));
             }
-        }*/
+        }
 
         // enque the output tensor to VECOUT queue
         outQueueZ.EnQue<T>(zLocal);
