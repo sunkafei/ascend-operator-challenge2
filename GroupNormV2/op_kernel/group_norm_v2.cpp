@@ -105,8 +105,8 @@ public:
         buf = Q_buf.AllocTensor<T>();
         SyncAll();
         SetAtomicNone();
-        DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(Gm_mean);
-        DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(Gm_rstd);
+        //DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(Gm_mean);
+        //DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(Gm_rstd);
         last = -1;
         float var, gm, bt, coef;
         int last2 = -1;
