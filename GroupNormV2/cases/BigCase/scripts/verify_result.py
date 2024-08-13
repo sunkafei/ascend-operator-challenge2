@@ -6,8 +6,8 @@ loss = 1e-4 # 容忍偏差，一般fp16要求绝对误差和相对误差均不�
 minimum = 10e-10
 
 def verify_result(real_result, golden):
-    mean = np.fromfile("/home/lhq/ascend-operator-challenge2/GroupNormV2/cases/BigCase/output/mean.bin", dtype=np.float32)
-    rstd = np.fromfile("/home/lhq/ascend-operator-challenge2/GroupNormV2/cases/BigCase/output/rstd.bin", dtype=np.float32)
+    mean = np.fromfile(real_result.rsplit('/', 1)[0] + "/mean.bin", dtype=np.float32)
+    rstd = np.fromfile(real_result.rsplit('/', 1)[0] + "/rstd.bin", dtype=np.float32)
     print("mean:", mean, file=sys.stderr) # mean: [ 0.00106605 -0.00164301]
     print("rstd:", rstd, file=sys.stderr) # rstd: [5.772267  5.7724257]
     real_result = np.fromfile(real_result, dtype=np.float32) # 从bin文件读取实际运算结果
