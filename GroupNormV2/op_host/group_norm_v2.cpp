@@ -40,23 +40,23 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
         num_cores = 1;
     }
 
-    const auto length = total_size / batch_size / num_channels;
+    uint64_t ub_size;
+    ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::UB, ub_size);
+    const auto limit = total_size / batch_size / num_channels;
     auto tile_length = -1;
-    for (int i = 1; i < length; i += 1) {
-        if (length % i != 0) {
+    for (int i = 1; i < limit; i += 1) {
+        if (limit % i != 0) {
             continue;
         }
-        auto tmp = length / i;
-        if (tmp * sizeofdatatype % 32 != 0) {
+        auto size = limit / i;
+        if (size * sizeofdatatype % 32 != 0) {
             continue;
         }
-        if (tmp * sizeofdatatype > 256 && tmp % (256 / sizeofdatatype) != 0) {
+        if (size * sizeofdatatype * 4 > ub_size * 0.7) {
             continue;
         }
-        if (tmp <= 65280 / sizeofdatatype / sizeofdatatype) {
-            tile_length = tmp;
-            break;
-        }
+        tile_length = size;
+        break;
     }
     auto span = (total_size / tile_length - 1) / num_cores + 1;
     if (sizeofdatatype == 2) { // todo:提升fp16的处理精度
@@ -72,7 +72,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     tiling.SaveToBuffer(context->GetRawTilingData()->GetData(), context->GetRawTilingData()->GetCapacity());
     context->GetRawTilingData()->SetDataSize(tiling.GetDataSize());
 
-    
+    std::cerr << "ub_size: " << ub_size << std::endl;
     std::cerr << "chunk_size: " << chunk_size << std::endl;
     std::cerr << "num_groups: " << num_groups << std::endl;
     std::cerr << "batch_size: " << batch_size << std::endl;
