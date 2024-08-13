@@ -29,6 +29,7 @@ public:
         this->data_copy_size = (sizeof(T) * batch_size * num_groups + 31) & ~31;
         this->group_size = total_size / batch_size / num_groups;
         this->channel_size = total_size / batch_size / num_channels;
+        this->group_tiles = group_size / tile_length;
 
         Gm_x.SetGlobalBuffer((__gm__ T*)x, total_size);
         Gm_gamma.SetGlobalBuffer((__gm__ T*)gamma, num_channels);
@@ -40,11 +41,18 @@ public:
         pipe.InitBuffer(Q_y, 2, sizeof(T) * tile_length);
         pipe.InitBuffer(Q_buf, 1, data_copy_size);
     }
-    __aicore__ inline void Process() {
+    __aicore__ inline void Process() { // 6849
         auto buf = Q_buf.AllocTensor<T>();
         Duplicate(buf, T(0), data_copy_size);
+        float sum = 0;
+        int last = 0;
         for (int32_t i = L; i < R; ++i) {
-            float mean = 0;
+            auto index = i / group_tiles;
+            if (index != last) [[unlikely]] {
+                buf.SetValue(last, sum / group_size);
+                last = index;
+                sum = 0;
+            }
             {
                 LocalTensor<T> x = Q_x.AllocTensor<T>();
                 DataCopy(x, Gm_x[i * tile_length], tile_length);
@@ -53,13 +61,11 @@ public:
             {
                 LocalTensor<T> x = Q_x.DeQue<T>();
                 Reduce(x, tile_length);
-                mean += (float)x.GetValue(0);
+                sum += (float)x.GetValue(0);
                 Q_x.FreeTensor(x);
             }
-            mean = mean / group_size;
-            auto index = i * tile_length / group_size;
-            buf.SetValue(index, (float)buf.GetValue(index) + mean);
         }
+        buf.SetValue(last, sum / group_size);
         SetAtomicAdd<T>();
         DataCopy(Gm_mean, buf, data_copy_size);
         Q_buf.FreeTensor(buf);
@@ -67,10 +73,17 @@ public:
         buf = Q_buf.AllocTensor<T>();
         SyncAll();
         Duplicate(buf, T(0), data_copy_size);
+        float avg = Gm_mean.GetValue(L / group_tiles);
+        sum = 0;
+        last = 0;
         for (int i = L; i < R; ++i) {
-            auto index = i * tile_length / group_size;
-            float avg = Gm_mean.GetValue(index);
-            float rstd = 0;
+            auto index = i / group_tiles;
+            if (index != last) [[unlikely]] {
+                buf.SetValue(last, sum);
+                last = index;
+                avg = Gm_mean.GetValue(index);
+                sum = 0;
+            }
             {
                 LocalTensor<T> x = Q_x.AllocTensor<T>();
                 DataCopy(x, Gm_x[i * tile_length], tile_length);
@@ -81,11 +94,11 @@ public:
                 Adds(x, x, T(-avg), tile_length);
                 Mul(x, x, x, tile_length);
                 Reduce(x, tile_length);
-                rstd += (float)x.GetValue(0) / group_size;
+                sum += (float)x.GetValue(0) / group_size;
                 Q_x.FreeTensor(x);
             }
-            buf.SetValue(index, (float)buf.GetValue(index) + rstd);
         }
+        buf.SetValue(last, sum);
         DataCopy(Gm_rstd, buf, data_copy_size);
         Q_buf.FreeTensor(buf);
 
@@ -94,13 +107,23 @@ public:
         SetAtomicNone();
         DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(Gm_mean);
         DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(Gm_rstd);
+        last = -1;
+        float var, gm, bt, coef;
+        int last2 = -1;
         for (int i = L; i < R; ++i) {
-            auto index = i * tile_length / group_size;
-            float avg = Gm_mean.GetValue(index);
-            float var = sqrt((float)Gm_rstd.GetValue(index) + epsilon);
-            float gm = Gm_gamma.GetValue(i * tile_length / channel_size % num_channels);
-            float bt = Gm_beta.GetValue(i * tile_length / channel_size % num_channels);
-            float coef = gm / var;
+            auto index = i / group_tiles;
+            auto index2 = i * tile_length / channel_size % num_channels;
+            if (index2 != last2) [[unlikely]] {
+                last2 = index2;
+                gm = Gm_gamma.GetValue(index2);
+                bt = Gm_beta.GetValue(index2);
+                if (index != last) [[unlikely]] {
+                    last = index;
+                    avg = Gm_mean.GetValue(index);
+                    var = sqrt((float)Gm_rstd.GetValue(index) + epsilon);
+                }
+                coef = gm / var;
+            }
             {
                 LocalTensor<T> x = Q_x.AllocTensor<T>();
                 DataCopy(x, Gm_x[i * tile_length], tile_length);
@@ -127,6 +150,7 @@ private:
     GlobalTensor<T> Gm_x, Gm_gamma, Gm_beta, Gm_y, Gm_mean, Gm_rstd;
     int32_t L, R, block_size, chunk_size, batch_size, num_groups, num_channels, total_size;
     int32_t tile_length, data_copy_size, group_size, channel_size;
+    int32_t group_tiles;
     float epsilon;
     TPipe pipe;
     TQue<QuePosition::VECIN, 2> Q_x;
