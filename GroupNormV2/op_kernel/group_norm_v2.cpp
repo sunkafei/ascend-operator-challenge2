@@ -130,9 +130,9 @@ public:
                 LocalTensor<T> y = Q_y.AllocTensor<T>();
                 LocalTensor<T> x = Q_x.DeQue<T>();
                 Adds(x, x, T(-avg), tile_length);
-                Muls(x, x, T(coef), tile_length);
+                Muls(y, x, T(coef), tile_length);
                 if (bt) {
-                    Adds(y, x, T(bt), tile_length);
+                    Adds(y, y, T(bt), tile_length);
                 }
                 Q_y.EnQue<T>(y);
                 Q_x.FreeTensor(x);
