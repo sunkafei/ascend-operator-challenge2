@@ -106,7 +106,7 @@ function main {
     fi
     echo "INFO: acl executable run success!"
 
-    time_ust=$(awk -F, '{print $(NF-16)}' $(find ./ -name op_summary*.csv) | tail -n 1)
+    time_ust=$(awk -F, '{print $(NF-31)}' $(find ./ -name op_summary*.csv) | tail -n 1)
     time_base=167
     time_ust=$(printf "%.0f" $time_ust)   
     echo $time_ust
