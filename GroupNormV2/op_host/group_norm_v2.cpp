@@ -39,12 +39,12 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     if (total_size / batch_size / num_groups % (64 / sizeofdatatype) != 0) {
         num_cores = 1;
     }
-    auto span = (batch_size * num_groups - 1) / num_cores + 1;
+    auto span = (batch_size * num_channels - 1) / num_cores + 1;
     tiling.set_span(span);
 
-    const auto length = total_size / batch_size / num_groups;
+    const auto length = total_size / batch_size / num_channels;
     auto tile_length = -1;
-    for (int i = num_channels / num_groups; i < length; i += num_channels / num_groups) {
+    for (int i = 1; i < length; i += 1) {
         if (length % i != 0) {
             continue;
         }
@@ -80,6 +80,12 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     std::cerr << "span: " << span << std::endl;
     std::cerr << "tile_length: " << tile_length << std::endl;
     std::cerr << "splits: " << length / tile_length << std::endl;
+
+    size_t usrSize = 1024 * 1024 * 40; // 设置用户需要使用的workspace大小。
+    // 如需要使用系统workspace需要调用GetLibApiWorkSpaceSize获取系统workspace的大小。
+    uint32_t sysWorkspaceSize = ascendcPlatform.GetLibApiWorkSpaceSize();
+    size_t *currentWorkspace = context->GetWorkspaceSizes(1); // 通过框架获取workspace的指针，GetWorkspaceSizes入参为所需workspace的块数。当前限制使用一块。
+    currentWorkspace[0] = usrSize + sysWorkspaceSize; // 设置总的workspace的数值大小，总的workspace空间由框架来申请并管理。
 
     return ge::GRAPH_SUCCESS;
 }
