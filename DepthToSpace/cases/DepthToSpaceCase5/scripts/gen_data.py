@@ -28,13 +28,13 @@ def depth_to_space_forward(x, block_size, mode='DCR', data_format='NHWC'):
     return res
 
 def gen_golden_data_simple():
-    input_x = np.random.uniform(-100, 100, [4,16,1024,1024]).astype(np.float32)
+    input_x = np.random.uniform(-5, 5, [3, 224, 224, 64]).astype(np.float32)
 
-    block_size = 4
-    mode = "CRD"
-    data_format="NCHW"
+    block_size = 8
+    mode = "DCR"
+    data_format="NHWC"
     golden = depth_to_space_forward(input_x,block_size,mode,data_format)
-    print(golden)
+    print(golden.shape)
     os.system("mkdir -p input")
     os.system("mkdir -p output")
     input_x.tofile("./input/input_x.bin")
