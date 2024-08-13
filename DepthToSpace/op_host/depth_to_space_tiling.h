@@ -13,6 +13,7 @@ BEGIN_TILING_DATA_DEF(DepthToSpaceTilingData)
     TILING_DATA_FIELD_DEF(uint32_t, core_remain);
     TILING_DATA_FIELD_DEF(uint32_t, bs);
     TILING_DATA_FIELD_DEF_ARR(uint32_t, 4, shape);
+    TILING_DATA_FIELD_DEF_ARR(uint32_t, 5, bit);
     TILING_DATA_FIELD_DEF(uint32_t, type);
 END_TILING_DATA_DEF;
 
