@@ -2,7 +2,6 @@
 #include "group_norm_v2_tiling.h"
 #include "register/op_def_registry.h"
 #include "tiling/platform/platform_ascendc.h"
-#include "tiling/tiling_api.h"
 #include <iostream>
 #include <cmath>
 
@@ -45,7 +44,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     ascendcPlatform.GetCoreMemSize(platform_ascendc::CoreMemType::UB, ub_size);
     const auto limit = total_size / batch_size / num_channels;
     auto tile_length = -1;
-    auto temp_length = -1;
     for (int i = 1; i < limit; i += 1) {
         if (limit % i != 0) {
             continue;
@@ -54,13 +52,10 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
         if (size * sizeofdatatype % 32 != 0) {
             continue;
         }
-        uint32_t min, max;
-        AscendC::GetSumMaxMinTmpSize(size, sizeofdatatype, false, min, max);
-        if ((size + max) * sizeofdatatype * 4 > ub_size * 0.9) {
+        if (size * sizeofdatatype * 4 > ub_size * 0.7) {
             continue;
         }
         tile_length = size;
-        temp_length = max;
         break;
     }
     auto span = (total_size / tile_length - 1) / num_cores + 1;
@@ -70,7 +65,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
     if (tile_length == -1) {
         span = (batch_size * num_groups - 1) / num_cores + 1;
     }
-    tiling.set_temp_length(temp_length);
     tiling.set_tile_length(tile_length);
     tiling.set_span(span);
 
