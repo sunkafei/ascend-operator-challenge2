@@ -7,15 +7,16 @@ template<typename T> class GroupNormV2Kernal {
 public:
     __aicore__ inline GroupNormV2Kernal() {}
     __aicore__ inline void Init(GM_ADDR x, GM_ADDR gamma, GM_ADDR beta, GM_ADDR y, GM_ADDR mean, GM_ADDR rstd, int32_t tile_length, int32_t span, int32_t chunk_size, int32_t batch_size, int32_t num_groups, int32_t num_channels, int32_t total_size, float epsilon) {
-        ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
+        auto num_cores = GetBlockNum();
+        auto block_index = GetBlockIdx();
         this->chunk_size = chunk_size;
         this->batch_size = batch_size;
         this->num_groups = num_groups;
         this->num_channels = num_channels;
         this->total_size = total_size;
         this->epsilon = epsilon;
-        this->L = GetBlockIdx() * span;
-        this->R = (GetBlockIdx() + 1) * span;
+        this->L = block_index * span;
+        this->R = (block_index + 1) * span;
         if (this->R > total_size / tile_length) {
             this->R = total_size / tile_length;
         }
@@ -26,6 +27,13 @@ public:
         this->channel_size = total_size / batch_size / num_channels;
         this->group_tiles = group_size / tile_length;
 
+        auto range = (batch_size * num_groups - 1) / num_cores + 1;
+        this->L2 = block_index * range;
+        this->R2 = (block_index + 1) * range;
+        if (this->R2 > batch_size * num_groups) {
+            this->R2 = batch_size * num_groups;
+        }
+
         Gm_x.SetGlobalBuffer((__gm__ T*)x, total_size);
         Gm_gamma.SetGlobalBuffer((__gm__ T*)gamma, num_channels);
         Gm_beta.SetGlobalBuffer((__gm__ T*)beta, num_channels);
@@ -34,21 +42,25 @@ public:
         Gm_rstd.SetGlobalBuffer((__gm__ T*)rstd, batch_size * num_groups);
         pipe.InitBuffer(Q_x, 2, sizeof(T) * tile_length);
         pipe.InitBuffer(Q_y, 2, sizeof(T) * tile_length);
-        pipe.InitBuffer(Q_buf, 1, data_copy_size);
+        pipe.InitBuffer(Q_mean, 1, data_copy_size);
+        pipe.InitBuffer(Q_rstd, 1, data_copy_size);
         pipe.InitBuffer(B_sumv, data_copy_size);
     }
     __aicore__ inline void Process() { // 6849
         auto sumv = B_sumv.Get<T>();
-        auto buf = Q_buf.AllocTensor<T>();
-        Duplicate(buf, T(0), data_copy_size);
-        float sum = 0;
+        auto mean = Q_mean.AllocTensor<T>();
+        auto rstd = Q_rstd.AllocTensor<T>();
+        Duplicate(mean, T(0), data_copy_size);
+        Duplicate(rstd, T(0), data_copy_size);
+        float sum = 0, sum2 = 0;
         int last = 0;
         for (int32_t i = L; i < R; ++i) {
             auto index = i / group_tiles;
             if (index != last) [[unlikely]] {
-                buf.SetValue(last, sum / group_size);
+                mean.SetValue(last, sum / group_size);
+                rstd.SetValue(last, sum2 / group_size);
                 last = index;
-                sum = 0;
+                sum = sum2 = 0;
             }
             {
                 LocalTensor<T> x = Q_x.AllocTensor<T>();
@@ -59,53 +71,39 @@ public:
                 LocalTensor<T> x = Q_x.DeQue<T>();
                 Reduce(sumv, x, tile_length);
                 sum += (float)sumv.GetValue(0);
-                Q_x.FreeTensor(x);
-            }
-        }
-        buf.SetValue(last, sum / group_size);
-        SetAtomicAdd<T>();
-        DataCopy(Gm_mean, buf, data_copy_size);
-        Q_buf.FreeTensor(buf);
-
-        buf = Q_buf.AllocTensor<T>();
-        SyncAll();
-        Duplicate(buf, T(0), data_copy_size);
-        float avg = Gm_mean.GetValue(L / group_tiles);
-        sum = 0;
-        last = 0;
-        for (int i = L; i < R; ++i) {
-            auto index = i / group_tiles;
-            if (index != last) [[unlikely]] {
-                buf.SetValue(last, sum);
-                last = index;
-                avg = Gm_mean.GetValue(index);
-                sum = 0;
-            }
-            {
-                LocalTensor<T> x = Q_x.AllocTensor<T>();
-                DataCopy(x, Gm_x[i * tile_length], tile_length);
-                Q_x.EnQue(x);
-            }
-            {
-                LocalTensor<T> x = Q_x.DeQue<T>();
-                Adds(x, x, T(-avg), tile_length);
                 Mul(x, x, x, tile_length);
                 Reduce(sumv, x, tile_length);
-                sum += (float)sumv.GetValue(0) / group_size;
+                sum2 += (float)sumv.GetValue(0);
                 Q_x.FreeTensor(x);
             }
         }
-        buf.SetValue(last, sum);
-        DataCopy(Gm_rstd, buf, data_copy_size);
-        Q_buf.FreeTensor(buf);
+        mean.SetValue(last, sum / group_size);
+        rstd.SetValue(last, sum2 / group_size);
+        SetAtomicAdd<T>();
+        DataCopy(Gm_mean, mean, data_copy_size);
+        DataCopy(Gm_rstd, rstd, data_copy_size);
+        Q_mean.FreeTensor(mean);
+        Q_rstd.FreeTensor(rstd);
 
-        buf = Q_buf.AllocTensor<T>();
+
+        mean = Q_mean.AllocTensor<T>();
+        rstd = Q_rstd.AllocTensor<T>();
+        Duplicate(rstd, T(0), data_copy_size);
+        SyncAll();
+        for (int i = L2; i < R2; ++i) {
+            float avg = Gm_mean.GetValue(i);
+            rstd.SetValue(i, -avg * avg);
+        }
+        DataCopy(Gm_rstd, rstd, data_copy_size);
+        Q_mean.FreeTensor(mean);
+        Q_rstd.FreeTensor(rstd);
+
+        mean = Q_mean.AllocTensor<T>();
+        rstd = Q_rstd.AllocTensor<T>();
         SyncAll();
         SetAtomicNone();
-        //DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(Gm_mean);
-        //DataCacheCleanAndInvalid<T, CacheLine::ENTIRE_DATA_CACHE>(Gm_rstd);
         last = -1;
-        float var, gm, bt, coef;
+        float avg, var, gm, bt, coef;
         int last2 = -1;
         for (int i = L; i < R; ++i) {
             auto index = i / group_tiles;
@@ -143,18 +141,19 @@ public:
                 Q_y.FreeTensor(y);
             }
         }
-        Q_buf.FreeTensor(buf);
+        Q_mean.FreeTensor(mean);
+        Q_rstd.FreeTensor(rstd);
     }
 private:
     GlobalTensor<T> Gm_x, Gm_gamma, Gm_beta, Gm_y, Gm_mean, Gm_rstd;
     int32_t L, R, block_size, chunk_size, batch_size, num_groups, num_channels, total_size;
     int32_t tile_length, data_copy_size, group_size, channel_size;
-    int32_t group_tiles;
+    int32_t group_tiles, L2, R2;
     float epsilon;
     TPipe pipe;
     TQue<QuePosition::VECIN, 2> Q_x;
     TQue<QuePosition::VECOUT, 2> Q_y;
-    TQue<QuePosition::VECOUT, 1> Q_buf;
+    TQue<QuePosition::VECOUT, 1> Q_mean, Q_rstd;
     TBuf<QuePosition::VECCALC> B_sumv;
 };
 template<typename T> class BruteForce {
