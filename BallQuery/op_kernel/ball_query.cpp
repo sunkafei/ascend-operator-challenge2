@@ -160,9 +160,9 @@ public:
                 if (dis == 0 || (min_radius <= dis && dis < max_radius)) {
                     indicesGm.SetValue(i * sample_num + cnt, k);
                     cnt += 1;
-                    if (cnt >= sample_num) {
+                    //if (cnt >= sample_num) {
                         break;
-                    }
+                    //}
                 }
             }
             if (cnt > 0 && cnt < sample_num) {
