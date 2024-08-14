@@ -5,7 +5,7 @@ constexpr int32_t BUFFER_NUM = 4;                                     // tensor 
 template<typename T, unsigned opType> class KernelDeepToSpace {
 public:
     __aicore__ inline KernelDeepToSpace() {}
-    __aicore__ inline void Init(GM_ADDR x, GM_ADDR z, uint32_t totalLength, uint32_t ALIGN_NUM, uint32_t block_size, uint32_t core_size, uint32_t core_remain, uint32_t bs, uint32_t* shape)
+    __aicore__ inline void Init(GM_ADDR x, GM_ADDR z, uint32_t totalLength, uint32_t ALIGN_NUM, uint32_t block_size, uint32_t core_size, uint32_t core_remain, uint32_t bs, uint32_t* shape, uint32_t* bit=nullptr)
     {
         ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
         this->totalLength = totalLength;
@@ -19,6 +19,7 @@ public:
 
         this->bs = bs;
         this->shape = shape;
+        this->bit = bit;
 
         auto startPointer = core_size * GetBlockIdx();
         auto bufferlength = this->blockLength;
@@ -179,6 +180,63 @@ private:
                 zLocal.SetValue(i - st, xGm.GetValue(h + w * mul3 + c * mul4 + x * mul5 + y));
                 // zLocal.SetValue(i - st, xGm.GetValue(b * mul1 + h * mul2 + w * mul3 + c * mul4 + x * mul5 + y));
             }
+        }else if constexpr (opType == 4){
+            auto mod2 = this->shape[2] - 1;
+            auto mod3 = this->bs - 1;
+            auto mod4 = this->shape[3] / this->bs - 1;
+            auto C = this->bit[3] - this->bit[4] - this->bit[4];
+            auto div2 = this->bit[2] + this->bit[3];
+            auto div3 = this->bit[2] + this->bit[4] + C;
+            auto div4 = this->bit[3] - this->bit[4];
+            auto mul3 = this->bit[3];
+
+            div2 = ~((1 << div2) - 1) ^ mod4;
+            mod2 <<= div4;
+            mul3 = mul3 - div4;
+            mod3 <<= div3;
+            auto mul4 = div3 - div4;
+
+            for(uint32_t i=st;i<ed;i++){
+                auto w = (i & mod2) << mul3;
+                auto x = (i & mod3) >> mul4;
+                auto hy = i & div2;
+
+                zLocal.SetValue(i - st, xGm.GetValue(hy ^ w ^ x));
+            }
+        }else if constexpr (opType == 5){
+            auto C = this->shape[3] / this->bs / this->bs;
+            auto div2 = this->shape[2] * this->shape[3];
+            auto div3 = this->shape[2] * this->bs * C;
+            auto div4 = this->bs * C;
+            auto mod2 = this->shape[2] - 1;
+
+            auto mul3 = this->shape[3];
+            for(uint32_t i=st;i<ed;i++){
+                auto w = (i / div4) & mod2;
+
+                auto h = i / div2 * div2;
+                auto x = (i - h) / div3;
+                auto y = i % div4;
+
+                zLocal.SetValue(i - st, xGm.GetValue(h + w * mul3 + x * div4 + y));
+            }
+        }else if constexpr (opType == 6){
+            auto mod4 = this->shape[3] / this->bs - 1;
+            auto C = this->shape[3] / this->bs / this->bs;
+            auto div2 = this->shape[2] * this->shape[3];
+            auto div3 = this->shape[2] * this->bs * C;
+            auto div4 = this->bit[3] - this->bit[4];
+
+            auto mul3 = this->bit[3];
+            for(uint32_t i=st;i<ed;i++){
+                auto w = (i >> div4) % this->shape[2];
+
+                auto h = i / div2 * div2;
+                auto x = (i - h) / div3;
+                auto y = i & mod4;
+
+                zLocal.SetValue(i - st, xGm.GetValue(h + w * mul3 + (x << div4) + y));
+            }
         }
 
         // enque the output tensor to VECOUT queue
@@ -211,6 +269,7 @@ private:
     uint32_t startPointer;
     uint32_t bs;
     uint32_t* shape;
+    uint32_t* bit;
     uint32_t st, ed;
     LocalTensor<T> signbit;
 };
@@ -233,6 +292,18 @@ extern "C" __global__ __aicore__ void depth_to_space(GM_ADDR x, GM_ADDR y, GM_AD
     }else if(tiling_data.type == 3){
         KernelDeepToSpace <DTYPE_X, 3> op;
         op.Init(x, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.bs, tiling_data.shape);
+        op.Process();
+    }else if(tiling_data.type == 4){
+        KernelDeepToSpace <DTYPE_X, 4> op;
+        op.Init(x, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.bs, tiling_data.shape, tiling_data.bit);
+        op.Process();
+    }else if(tiling_data.type == 5){
+        KernelDeepToSpace <DTYPE_X, 5> op;
+        op.Init(x, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.bs, tiling_data.shape, tiling_data.bit);
+        op.Process();
+    }else if(tiling_data.type == 6){
+        KernelDeepToSpace <DTYPE_X, 6> op;
+        op.Init(x, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.bs, tiling_data.shape, tiling_data.bit);
         op.Process();
     }
 }

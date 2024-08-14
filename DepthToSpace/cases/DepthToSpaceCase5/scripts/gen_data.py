@@ -28,7 +28,7 @@ def depth_to_space_forward(x, block_size, mode='DCR', data_format='NHWC'):
     return res
 
 def gen_golden_data_simple():
-    input_x = np.random.uniform(-5, 5, [3, 224, 224, 64]).astype(np.float32)
+    input_x = np.random.uniform(-5, 5, [3, 256, 256, 64]).astype(np.float32)
 
     block_size = 8
     mode = "DCR"

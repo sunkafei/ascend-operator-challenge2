@@ -32,10 +32,14 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling.set_bs(*context->GetAttrs()->GetInt(0));
     const gert::Shape vec = context->GetInputShape(0)->GetOriginShape();
     uint32_t shape[4] = {0};
+    uint32_t bit[4] = {0};
     for(int i=0;i<vec.GetDimNum();i++){
         shape[i] = vec.GetDim(i);
+        bit[i] = __builtin_ctz(shape[i]);
     }
+    bit[4] = __builtin_ctz(*context->GetAttrs()->GetInt(0));
     tiling.set_shape(shape);
+    tiling.set_bit(bit);
     const char *mode = context->GetAttrs()->GetAttrPointer<char>(1);
     const char *format = context->GetAttrs()->GetAttrPointer<char>(2);
 
@@ -45,6 +49,15 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     }
     if(strcmp(format, "NHWC") == 0){
         type |= 2;
+    }
+    if(type == 2){
+        if(__builtin_popcount(shape[2]) == 1 && __builtin_popcount(shape[3]) == 1){
+            type = 4;
+        }else if(__builtin_popcount(shape[2]) == 1){
+            type = 5;
+        }else if(__builtin_popcount(shape[3]) == 1){
+            type = 6;
+        }
     }
     tiling.set_type(type);
     // std::cout << mode << " " << format << " " << type << std::endl;

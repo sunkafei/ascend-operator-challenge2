@@ -24,13 +24,13 @@ int deviceId = 0;
 OperatorDesc CreateOpDesc()
 {
     // define operator
-    std::vector<int64_t> shape_x {3, 256, 256, 64};
-    std::vector<int64_t> shape_y {3, 2048, 2048};
+    std::vector<int64_t> shape_x {4, 16, 1024, 1024};
+    std::vector<int64_t> shape_y {4, 32, 2048, 256};
     
     aclDataType dataType = ACL_FLOAT;
     aclFormat format = ACL_FORMAT_ND;
     OperatorDesc opDesc;
-    opDesc.block_size = 8;
+    opDesc.block_size = 2;
     opDesc.mode="DCR";
     opDesc.dataFormat = "NHWC";
     opDesc.AddInputTensorDesc(dataType, shape_x.size(), shape_x.data(), format);
