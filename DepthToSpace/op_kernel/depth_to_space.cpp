@@ -182,21 +182,26 @@ private:
             }
         }else if constexpr (opType == 4){
             auto mod2 = this->shape[2] - 1;
+            auto mod3 = this->bs - 1;
             auto mod4 = this->shape[3] / this->bs - 1;
             auto C = this->bit[3] - this->bit[4] - this->bit[4];
             auto div2 = this->bit[2] + this->bit[3];
             auto div3 = this->bit[2] + this->bit[4] + C;
             auto div4 = this->bit[3] - this->bit[4];
-
             auto mul3 = this->bit[3];
+
+            div2 = ~((1 << div2) - 1) ^ mod4;
+            mod2 <<= div4;
+            mul3 = mul3 - div4;
+            mod3 <<= div3;
+            auto mul4 = div3 - div4;
+
             for(uint32_t i=st;i<ed;i++){
-                auto w = (i >> div4) & mod2;
+                auto w = (i & mod2) << mul3;
+                auto x = (i & mod3) >> mul4;
+                auto hy = i & div2;
 
-                auto h = (i >> div2) << div2;
-                auto x = (i - h) >> div3;
-                auto y = i & mod4;
-
-                zLocal.SetValue(i - st, xGm.GetValue(h + (w << mul3) + (x << div4) + y));
+                zLocal.SetValue(i - st, xGm.GetValue(hy ^ w ^ x));
             }
         }else if constexpr (opType == 5){
             auto C = this->shape[3] / this->bs / this->bs;
