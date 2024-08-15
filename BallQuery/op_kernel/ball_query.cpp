@@ -167,6 +167,7 @@ public:
                         Q_indices.FreeTensor(indices);
                     }
                     else {
+                        PipeBarrier<PIPE_ALL>();
                         for (int cnt = 0; cnt < sample_num; ++cnt) {
                             indicesGm.SetValue(i * sample_num + cnt, k);
                         }
