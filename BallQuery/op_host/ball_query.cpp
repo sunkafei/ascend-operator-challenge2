@@ -38,7 +38,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
             abort(); //todo
         }
     }
-    else if (num_points * sizeofdatatype % 64 == 0 || num_centers * batch_size < 40000) {
+    else if (num_points * sizeofdatatype % 64 == 0 && num_centers * batch_size > 40000) {
         type = -1;
         num_cores = ascendcPlatform.GetCoreNum();
     }
