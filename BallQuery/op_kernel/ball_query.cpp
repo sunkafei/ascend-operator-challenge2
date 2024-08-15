@@ -160,10 +160,17 @@ public:
                 float z = pointsGm.GetValue((batch + k) * 3 + 2);
                 float dis = (center_x - x) * (center_x - x) + (center_y - y) * (center_y - y) + (center_z - z) * (center_z - z);
                 if (dis == 0 || (min_radius <= dis && dis < max_radius)) {
-                    auto indices = Q_indices.AllocTensor<int32_t>();
-                    Duplicate(indices, int32_t(k), align_num);
-                    DataCopy(indicesGm[i * sample_num], indices, align_num);
-                    Q_indices.FreeTensor(indices);
+                    if (i != R - 1) [[likely]]{
+                        auto indices = Q_indices.AllocTensor<int32_t>();
+                        Duplicate(indices, int32_t(k), align_num);
+                        DataCopy(indicesGm[i * sample_num], indices, align_num);
+                        Q_indices.FreeTensor(indices);
+                    }
+                    else {
+                        for (int cnt = 0; cnt < sample_num; ++cnt) {
+                            indicesGm.SetValue(i * sample_num + cnt, k);
+                        }
+                    }
                     break;
                 }
             }
