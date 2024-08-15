@@ -190,6 +190,7 @@ public:
                 break;
             }
         }
+        DataCacheCleanAndInvalid<int32_t, CacheLine::ENTIRE_DATA_CACHE>(indicesGm);
     }
 
 private:
