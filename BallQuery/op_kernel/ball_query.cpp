@@ -169,9 +169,9 @@ public:
             }
         }
         DataCacheCleanAndInvalid<int32_t, CacheLine::ENTIRE_DATA_CACHE>(indicesGm);
-        //event_t id = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE3_S));
-        //SetFlag<HardEvent::MTE3_S>(id);
-        //WaitFlag<HardEvent::MTE3_S>(id);
+        event_t id = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE3_S));
+        SetFlag<HardEvent::MTE3_S>(id);
+        WaitFlag<HardEvent::MTE3_S>(id);
         SyncAll();
         const int i = R - 1;
         float center_x = centerGm.GetValue(i * 3 + 0);
