@@ -149,6 +149,24 @@ public:
         pipe.InitBuffer(Q_indices, 4, sizeof(int32_t) * align_num);
     }
     __aicore__ inline void Process() { // 8733
+        const int i = R - 1;
+        float center_x = centerGm.GetValue(i * 3 + 0);
+        float center_y = centerGm.GetValue(i * 3 + 1);
+        float center_z = centerGm.GetValue(i * 3 + 2);
+        const int batch = i / num_centers * num_points;
+        for (int k = 0; k < num_points; ++k) {
+            float x = pointsGm.GetValue((batch + k) * 3 + 0);
+            float y = pointsGm.GetValue((batch + k) * 3 + 1);
+            float z = pointsGm.GetValue((batch + k) * 3 + 2);
+            float dis = (center_x - x) * (center_x - x) + (center_y - y) * (center_y - y) + (center_z - z) * (center_z - z);
+            if (dis == 0 || (min_radius <= dis && dis < max_radius)) {
+                for (int cnt = 0; cnt < sample_num; ++cnt) {
+                    indicesGm.SetValue(i * sample_num + cnt, k);
+                }
+                break;
+            }
+        }
+        DataCacheCleanAndInvalid<int32_t, CacheLine::ENTIRE_DATA_CACHE>(indicesGm);
         for (int i = L; i < R; ++i) {
             float center_x = centerGm.GetValue(i * 3 + 0);
             float center_y = centerGm.GetValue(i * 3 + 1);
@@ -160,25 +178,14 @@ public:
                 float z = pointsGm.GetValue((batch + k) * 3 + 2);
                 float dis = (center_x - x) * (center_x - x) + (center_y - y) * (center_y - y) + (center_z - z) * (center_z - z);
                 if (dis == 0 || (min_radius <= dis && dis < max_radius)) {
-                    if (i != R - 1) [[likely]]{
-                        auto indices = Q_indices.AllocTensor<int32_t>();
-                        Duplicate(indices, int32_t(k), align_num);
-                        DataCopy(indicesGm[i * sample_num], indices, align_num);
-                        Q_indices.FreeTensor(indices);
-                    }
-                    else {
-                        event_t id = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE3_S));
-                        SetFlag<HardEvent::MTE3_S>(id);
-                        WaitFlag<HardEvent::MTE3_S>(id);
-                        for (int cnt = 0; cnt < sample_num; ++cnt) {
-                            indicesGm.SetValue(i * sample_num + cnt, k);
-                        }
-                    }
+                    auto indices = Q_indices.AllocTensor<int32_t>();
+                    Duplicate(indices, int32_t(k), align_num);
+                    DataCopy(indicesGm[i * sample_num], indices, align_num);
+                    Q_indices.FreeTensor(indices);
                     break;
                 }
             }
         }
-        DataCacheCleanAndInvalid<int32_t, CacheLine::ENTIRE_DATA_CACHE>(indicesGm);
     }
 
 private:
