@@ -167,7 +167,9 @@ public:
                         Q_indices.FreeTensor(indices);
                     }
                     else {
-                        PipeBarrier<PIPE_ALL>();
+                        event_t id = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE3_S));
+                        SetFlag<HardEvent::MTE3_S>(id);
+                        WaitFlag<HardEvent::MTE3_S>(id);
                         for (int cnt = 0; cnt < sample_num; ++cnt) {
                             indicesGm.SetValue(i * sample_num + cnt, k);
                         }
