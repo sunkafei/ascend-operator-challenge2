@@ -103,7 +103,7 @@ public:
         SyncAll();
         SetAtomicNone();
         last = -1;
-        float avg, var, gm, bt, coef;
+        float avg, var, gm, bt;
         int last2 = -1;
         for (int i = L; i < R; ++i) {
             auto index = i / group_tiles;
@@ -117,7 +117,8 @@ public:
                     avg = Gm_mean.GetValue(index);
                     var = sqrt((float)Gm_rstd.GetValue(index) + epsilon);
                 }
-                coef = gm / var;
+                gm = gm / var;
+                bt += gm * -avg;
             }
             {
                 LocalTensor<T> x = Q_x.AllocTensor<T>();
@@ -127,11 +128,8 @@ public:
             {
                 LocalTensor<T> y = Q_y.AllocTensor<T>();
                 LocalTensor<T> x = Q_x.DeQue<T>();
-                Adds(x, x, T(-avg), tile_length);
-                Muls(y, x, T(coef), tile_length);
-                if (bt) {
-                    Adds(y, y, T(bt), tile_length);
-                }
+                Muls(x, x, T(gm), tile_length);
+                Adds(y, x, T(bt), tile_length);
                 Q_y.EnQue<T>(y);
                 Q_x.FreeTensor(x);
             }
