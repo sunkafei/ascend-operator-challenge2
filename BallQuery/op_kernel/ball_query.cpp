@@ -149,7 +149,7 @@ public:
         pipe.InitBuffer(Q_indices, 4, sizeof(int32_t) * align_num);
     }
     __aicore__ inline void Process() { // 8733
-        for (int i = L; i < R; ++i) {
+        for (int i = L; i < R - 1; ++i) {
             float center_x = centerGm.GetValue(i * 3 + 0);
             float center_y = centerGm.GetValue(i * 3 + 1);
             float center_z = centerGm.GetValue(i * 3 + 2);
@@ -172,7 +172,6 @@ public:
         event_t id = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE3_S));
         SetFlag<HardEvent::MTE3_S>(id);
         WaitFlag<HardEvent::MTE3_S>(id);
-        SyncAll();
         const int i = R - 1;
         float center_x = centerGm.GetValue(i * 3 + 0);
         float center_y = centerGm.GetValue(i * 3 + 1);
