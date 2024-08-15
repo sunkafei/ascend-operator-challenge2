@@ -27,6 +27,7 @@ def verify_result(real_result, golden):
         print("test pass")
         return True
     else:
+        print("diff_num:", diff_num)
         print("golden:", golden[0][:8], file=sys.stderr)
         print("output:", real_result[0][:8], file=sys.stderr)
         print("[ERROR] result error")
