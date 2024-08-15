@@ -22,6 +22,7 @@ else ()
 endif()
 
 set(CUST_PKG_PATH "${INC_PATH}/opp/vendors/customize/op_api")
+set(BUILT_PKG_PATH "${INC_PATH}/opp/built-in/op_impl/ai_core/tbe/op_api")
 
 set(LIB_PATH $ENV{NPU_HOST_LIB})
 
@@ -48,6 +49,7 @@ link_directories(
     ${LIB_PATH}
     ${LIB_PATH1}
     ${CUST_PKG_PATH}/lib
+    ${INC_PATH}/lib64
 )
 
 add_executable(execute_op
@@ -60,6 +62,7 @@ add_executable(execute_op
 target_link_libraries(execute_op
     ascendcl
     cust_opapi
+    opapi
     acl_op_compiler
     nnopbase
     stdc++

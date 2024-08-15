@@ -24,9 +24,9 @@ int deviceId = 0;
 OperatorDesc CreateOpDesc()
 {
     // define operator
-    int64_t b = 224;
-    int64_t m = 224;
-    int64_t n = 224;
+    int64_t b = 256;
+    int64_t m = 256;
+    int64_t n = 256;
     std::vector<int64_t> shape_xyz {b, n, 3};
     std::vector<int64_t> shape_center_xyz {b, m, 3};
     
@@ -35,7 +35,7 @@ OperatorDesc CreateOpDesc()
     aclFormat format = ACL_FORMAT_ND;
     OperatorDesc opDesc;
     opDesc.minRadius = 10;
-    opDesc.maxRadius= 50;
+    opDesc.maxRadius= 100;
     opDesc.sampleNum = 20;
     std::vector<int64_t> shape_out {b, m, opDesc.sampleNum};
     opDesc.AddInputTensorDesc(dataType, shape_xyz.size(), shape_xyz.data(), format);

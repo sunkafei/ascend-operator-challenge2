@@ -74,16 +74,16 @@ def stack_ball_query(xyz, center_xyz, xyz_batch_cnt, center_xyz_batch_cnt, max_r
 
 
 def gen_golden_data_simple():
-    b = 224
-    m = 224
-    n = 224
+    b = 256
+    m = 256
+    n = 256
 
     input_xyz = np.random.uniform(-10, 10, [b, n, 3]).astype(np.float32)
     center_xyz = np.random.uniform(-10, 10, [b, m, 3]).astype(np.float32)
     xyz_batch_cnt = None
     center_xyz_batch_cnt = None
     min_radius = 10
-    max_radius = 50
+    max_radius = 100
     sample_num = 20
     if xyz_batch_cnt is None:
         golden = ball_query(input_xyz, center_xyz, min_radius, max_radius, sample_num)

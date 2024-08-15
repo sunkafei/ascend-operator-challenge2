@@ -9,6 +9,7 @@
 */
 #include "op_runner.h"
 #include "aclnn_ball_query.h"
+#include "aclnn_mul.h"
 #include <limits>
 #include <cassert>
 #include "acl/acl_op_compiler.h"
@@ -339,8 +340,13 @@ bool OpRunner::RunOp()
 
     size_t workspaceSize = 0;
 	aclOpExecutor *handle = nullptr;
-    
-	auto ret = aclnnBallQueryGetWorkspaceSize(inputTensor_[0], inputTensor_[1],nullptr,nullptr,opDesc_->minRadius, opDesc_->maxRadius,
+
+    float alphaValue = 1.0f;
+    auto alpha = aclCreateScalar(&alphaValue, aclDataType::ACL_FLOAT);
+    auto ret_add = aclnnMulsGetWorkspaceSize(inputTensor_[0], alpha, inputTensor_[0], &workspaceSize, &handle);
+    ret_add = aclnnMuls(nullptr, workspaceSize, handle, stream);
+  
+	auto ret = aclnnBallQueryGetWorkspaceSize(inputTensor_[0], inputTensor_[1],nullptr, nullptr,opDesc_->minRadius, opDesc_->maxRadius,
                                                 opDesc_->sampleNum, outputTensor_[0], &workspaceSize, &handle);
     if (ret != ACL_SUCCESS) {
         (void)aclrtDestroyStream(stream);

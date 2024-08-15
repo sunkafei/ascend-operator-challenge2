@@ -6,8 +6,8 @@ loss = 1e-3 # 容忍偏差，一般fp16要求绝对误差和相对误差均不�
 
 
 def verify_result(real_result, golden):
-    b = 224
-    m = 224
+    b = 256
+    m = 256
     sample_num = 20
     
     real_result = np.fromfile(real_result, dtype=np.int32) # 从bin文件读取实际运算结果

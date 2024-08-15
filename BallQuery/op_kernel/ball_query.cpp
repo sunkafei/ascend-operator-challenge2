@@ -140,17 +140,19 @@ public:
         if (this->R > batch_size * num_centers) {
             this->R = batch_size * num_centers;
         }
+        constexpr auto mask = 32 / sizeof(T) - 1;
+        this->align_num = (sample_num + mask) & ~mask; 
 
         pointsGm.SetGlobalBuffer((__gm__ T*)points, batch_size * num_points * 3);
         centerGm.SetGlobalBuffer((__gm__ T*)center, batch_size * num_centers * 3);
         indicesGm.SetGlobalBuffer((__gm__ int32_t*)indices, batch_size * num_centers * sample_num);
+        pipe.InitBuffer(Q_indices, 4, sizeof(int32_t) * align_num);
     }
     __aicore__ inline void Process() { // 8733
         for (int i = L; i < R; ++i) {
             float center_x = centerGm.GetValue(i * 3 + 0);
             float center_y = centerGm.GetValue(i * 3 + 1);
             float center_z = centerGm.GetValue(i * 3 + 2);
-            int32_t cnt = 0;
             const int batch = i / num_centers * num_points;
             for (int k = 0; k < num_points; ++k) {
                 float x = pointsGm.GetValue((batch + k) * 3 + 0);
@@ -158,18 +160,11 @@ public:
                 float z = pointsGm.GetValue((batch + k) * 3 + 2);
                 float dis = (center_x - x) * (center_x - x) + (center_y - y) * (center_y - y) + (center_z - z) * (center_z - z);
                 if (dis == 0 || (min_radius <= dis && dis < max_radius)) {
-                    indicesGm.SetValue(i * sample_num + cnt, k);
-                    cnt += 1;
-                    //if (cnt >= sample_num) {
-                        break;
-                    //}
-                }
-            }
-            if (cnt > 0 && cnt < sample_num) {
-                int k = indicesGm.GetValue(i * sample_num + cnt - 1);
-                while (cnt < sample_num) {
-                    indicesGm.SetValue(i * sample_num + cnt, k);
-                    cnt += 1;
+                    auto indices = Q_indices.AllocTensor<int32_t>();
+                    Duplicate(indices, int32_t(k), align_num);
+                    DataCopy(indicesGm[i * sample_num], indices, align_num);
+                    Q_indices.FreeTensor(indices);
+                    break;
                 }
             }
         }
@@ -181,7 +176,9 @@ private:
     GlobalTensor<int32_t> indicesGm;
     float min_radius, max_radius;
     int32_t sample_num, batch_size, num_points, num_centers;
-    int32_t L, R;
+    int32_t L, R, align_num;
+    TPipe pipe;
+    TQue<QuePosition::VECOUT, 4> Q_indices;
 };
 extern "C" __global__ __aicore__ void ball_query(GM_ADDR xyz, GM_ADDR center_xyz, GM_ADDR xyz_batch_cnt, GM_ADDR center_xyz_batch, GM_ADDR idx, GM_ADDR workspace, GM_ADDR tiling) {
     GET_TILING_DATA(tiling_data, tiling);
