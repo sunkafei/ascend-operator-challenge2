@@ -22,14 +22,16 @@ def verify_result(real_result, golden):
             golden_tmp = np.unique(golden[i][m])
             mask = ~np.in1d(real_tmp, golden_tmp)
             diff_num = diff_num + len(real_tmp[mask])
+            if (len(real_tmp[mask])):
+                print("----------------------------", file=sys.stderr)
+                print("golden:", golden[i][m], file=sys.stderr)
+                print("output:", real_result[i][m], file=sys.stderr)
 
     if diff_num < all_len * loss:
         print("test pass")
         return True
     else:
         print("diff_num:", diff_num, file=sys.stderr)
-        print("golden:", golden[0][:8], file=sys.stderr)
-        print("output:", real_result[0][:8], file=sys.stderr)
         print("[ERROR] result error")
         return False
 
