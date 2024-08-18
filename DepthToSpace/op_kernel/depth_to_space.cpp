@@ -521,7 +521,6 @@ private:
         auto hy = i / (this->shape[2] * this->shape[3] / length) * (this->shape[2] * this->shape[3] / length);
         auto x = i % this->bs * this->shape[2];
         auto w = i / this->bs % this->shape[2];
-        SyncAll();
 
         DataCopy(zGm[(hy ^ x ^ w) * this->tileLength], zLocal, length);
         // free output tensor for reuse
