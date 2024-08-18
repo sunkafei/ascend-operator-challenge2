@@ -1,6 +1,6 @@
 #include "kernel_operator.h"
 using namespace AscendC;
-constexpr int32_t BUFFER_NUM = 2;                                     // tensor num for each queue
+constexpr int32_t BUFFER_NUM = 4;                                     // tensor num for each queue
 
 template<typename T, unsigned opType> class KernelDeepToSpace {
 public:
@@ -432,6 +432,37 @@ public:
         pipe.InitBuffer(inQueueX, BUFFER_NUM, this->tileLength * sizeof(T));
         pipe.InitBuffer(outQueueZ, BUFFER_NUM, this->tileLength * sizeof(T));
     }
+    // __aicore__ inline void Process()
+    // {
+    //     // loop count need to be doubled, due to double buffer
+    //     int32_t loopCount = this->tileNum;
+    //     auto length = this->tileLength;
+    //     // tiling strategy, pipeline parallel
+    //     for (int32_t i = 0; i < loopCount; i++) {
+    //         auto progress = i;
+    //         {
+    //             LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
+    //             DataCopy(xLocal, xGm[progress * this->tileLength], length);
+    //             event_t eventIDSToMTE3 = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE2_MTE3));
+    //             SetFlag<HardEvent::MTE2_MTE3>(eventIDSToMTE3);
+    //             WaitFlag<HardEvent::MTE2_MTE3>(eventIDSToMTE3);
+    //             inQueueX.EnQue(xLocal);
+    //         }
+    //         {
+    //             LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+
+    //             auto i = this->st + progress;
+    //             auto hy = i / (this->shape[2] * this->shape[3] / length) * (this->shape[2] * this->shape[3] / length);
+    //             auto x = i % this->bs * this->shape[2];
+    //             auto w = i / this->bs % this->shape[2];
+
+    //             DataCopy(zGm[(hy ^ x ^ w) * this->tileLength], xLocal, length);
+    //             // DataCopy(zGm[j * this->tileLength], xLocal, length);
+    //             // free output tensor for reuse
+    //             inQueueX.FreeTensor(xLocal);
+    //         }
+    //     }
+    // }
     __aicore__ inline void Process()
     {
         // loop count need to be doubled, due to double buffer
@@ -439,7 +470,7 @@ public:
         // tiling strategy, pipeline parallel
         for (int32_t i = 0; i < loopCount; i++) {
             CopyIn(i, this->tileLength);
-            Compute(i, this->tileLength);
+            // Compute(i, this->tileLength);
             CopyOut(i, this->tileLength);
         }
     }
@@ -451,26 +482,31 @@ private:
         LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
         // copy progress_th tile from global tensor to local tensor
         DataCopy(xLocal, xGm[progress * this->tileLength], length);
+        
+        event_t eventIDSToMTE3 = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE2_MTE3));
+        SetFlag<HardEvent::MTE2_MTE3>(eventIDSToMTE3);
+        WaitFlag<HardEvent::MTE2_MTE3>(eventIDSToMTE3);
         // enque input tensors to VECIN queue
         inQueueX.EnQue(xLocal);
     }
-    __aicore__ inline void Compute(int32_t progress, uint32_t length)
-    {
-        // deque input tensors from VECIN queue
-        LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-        LocalTensor<T> zLocal = outQueueZ.AllocTensor<T>();
+    // __aicore__ inline void Compute(int32_t progress, uint32_t length)
+    // {
+    //     // deque input tensors from VECIN queue
+    //     LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+    //     LocalTensor<T> zLocal = outQueueZ.AllocTensor<T>();
 
-        DataCopy(zLocal, xLocal, length);
+    //     DataCopy(zLocal, xLocal, length);
 
-        // enque the output tensor to VECOUT queue
-        outQueueZ.EnQue<T>(zLocal);
-        // free input tensors for reuse
-        inQueueX.FreeTensor(xLocal);
-    }
+    //     // enque the output tensor to VECOUT queue
+    //     outQueueZ.EnQue<T>(zLocal);
+    //     // free input tensors for reuse
+    //     inQueueX.FreeTensor(xLocal);
+    // }
     __aicore__ inline void CopyOut(int32_t progress, uint32_t length)
     {
         // deque output tensor from VECOUT queue
-        LocalTensor<T> zLocal = outQueueZ.DeQue<T>();
+        // LocalTensor<T> zLocal = outQueueZ.DeQue<T>();
+        LocalTensor<T> zLocal = inQueueX.DeQue<T>();
         // copy progress_th tile from local tensor to global tensor
         // auto mod1 = this->bs - 1;
         // auto mod2 = this->shape[2] - 1;
@@ -485,10 +521,12 @@ private:
         auto hy = i / (this->shape[2] * this->shape[3] / length) * (this->shape[2] * this->shape[3] / length);
         auto x = i % this->bs * this->shape[2];
         auto w = i / this->bs % this->shape[2];
+        SyncAll();
 
         DataCopy(zGm[(hy ^ x ^ w) * this->tileLength], zLocal, length);
         // free output tensor for reuse
-        outQueueZ.FreeTensor(zLocal);
+        // outQueueZ.FreeTensor(zLocal);
+        inQueueX.FreeTensor(zLocal);
     }
 
 private:
