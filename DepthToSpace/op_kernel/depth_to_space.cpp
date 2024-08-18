@@ -443,9 +443,6 @@ public:
             {
                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
                 DataCopy(xLocal, xGm[progress * this->tileLength], length);
-                event_t eventIDSToMTE3 = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE2_MTE3));
-                SetFlag<HardEvent::MTE2_MTE3>(eventIDSToMTE3);
-                WaitFlag<HardEvent::MTE2_MTE3>(eventIDSToMTE3);
                 inQueueX.EnQue(xLocal);
             }
             {
@@ -525,8 +522,7 @@ private:
 private:
     TPipe pipe;
     // create queues for input, in this case depth is equal to buffer num
-    // TQue<QuePosition::VECIN, BUFFER_NUM> inQueueX;
-    TQue<QuePosition::VECOUT, BUFFER_NUM> inQueueX;
+    TQue<QuePosition::VECIN, BUFFER_NUM> inQueueX;
     // create queue for output, in this case depth is equal to buffer num
     TQue<QuePosition::VECOUT, BUFFER_NUM> outQueueZ;
     GlobalTensor<T> xGm;
