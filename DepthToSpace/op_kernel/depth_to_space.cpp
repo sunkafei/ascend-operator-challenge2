@@ -453,7 +453,29 @@ public:
         auto div3 = ~((1 << (this->bit[4] + this->bit[2])) - 1);
         auto mul3 = this->bit[3] - this->bit[4];
 
-        for (int32_t i = 0; i < loopCount; i+=d) {
+        auto st2 = (this->st + d - 1) / d * d - this->st;
+        auto ed2 = (loopCount - st2) / d * d;
+
+        for(int32_t i = 0; i < st2; i++) {
+            {
+                LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
+                DataCopy(xLocal, xGm[i << mul3], this->tileLength);
+                inQueueX.EnQue(xLocal);
+            }
+            {
+                LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+                auto j = this->st + i;
+                auto hy = j & div3;
+                auto x = (j & mod1) << this->bit[2];
+                auto w = (j >> div2) & mod2;
+                
+                DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal, this->tileLength);
+                // free output tensor for reuse
+                inQueueX.FreeTensor(xLocal);
+            }
+        }
+
+        for (int32_t i = st2; i < ed2; i+=d) {
             {
                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
                 DataCopy(xLocal, xGm[i << mul3], length);
@@ -470,6 +492,25 @@ public:
 
                     DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[k << mul3], params);
                 }
+                // free output tensor for reuse
+                inQueueX.FreeTensor(xLocal);
+            }
+        }
+
+        for(int32_t i = ed2; i < loopCount; i++) {
+            {
+                LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
+                DataCopy(xLocal, xGm[i << mul3], this->tileLength);
+                inQueueX.EnQue(xLocal);
+            }
+            {
+                LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+                auto j = this->st + i;
+                auto hy = j & div3;
+                auto x = (j & mod1) << this->bit[2];
+                auto w = (j >> div2) & mod2;
+                
+                DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal, this->tileLength);
                 // free output tensor for reuse
                 inQueueX.FreeTensor(xLocal);
             }
