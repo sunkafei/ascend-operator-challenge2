@@ -403,7 +403,7 @@ private:
 template<typename T, unsigned opType> class KernelDeepToSpace2 {
 public:
     __aicore__ inline KernelDeepToSpace2() {}
-    __aicore__ inline void Init(GM_ADDR x, GM_ADDR z, uint32_t totalLength, uint32_t ALIGN_NUM, uint32_t block_size, uint32_t core_size, uint32_t core_remain, uint32_t bs, uint32_t* shape, uint32_t* bit)
+    __aicore__ inline void Init(GM_ADDR x, GM_ADDR z, uint32_t totalLength, uint32_t ALIGN_NUM, uint32_t block_size, uint32_t core_size, uint32_t core_remain, uint32_t bs, uint32_t* shape, uint32_t batch, uint32_t* bit=nullptr)
     {
         ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
         this->totalLength = totalLength;
@@ -417,7 +417,9 @@ public:
         this->tileLength = block_size;
 
         this->bs = bs;
+        this->ALIGN_NUM = ALIGN_NUM;
         this->shape = shape;
+        this->batch = batch;
 
         auto startPointer = core_size * GetBlockIdx() * block_size;
         this->startPointer = startPointer;
@@ -429,41 +431,45 @@ public:
         this->tileNum = this->blockLength;
 
         // pipe alloc memory to queue, the unit is Bytes
-        pipe.InitBuffer(inQueueX, BUFFER_NUM, this->tileLength * sizeof(T));
+        pipe.InitBuffer(inQueueX, BUFFER_NUM, this->batch * this->bs * this->tileLength * sizeof(T));
         // pipe.InitBuffer(outQueueZ, BUFFER_NUM, this->tileLength * sizeof(T));
     }
     __aicore__ inline void Process()
     {
-        // loop count need to be doubled, due to double buffer
         int32_t loopCount = this->tileNum;
-        auto length = this->tileLength;
-        // tiling strategy, pipeline parallel
+        auto length = this->batch * this->bs * this->tileLength;
+        auto length2 = length / this->bs;
+        auto d = this->batch * this->bs;
+
+        DataCopyParams params;
+        params.blockCount = this->batch;
+        params.blockLen = this->tileLength / this->ALIGN_NUM;
+        params.srcStride = this->tileLength / this->ALIGN_NUM;
+        params.dstStride = 0;
                 
         auto mod1 = this->bs - 1;
         auto mod2 = this->shape[2] - 1;
         auto div2 = this->bit[4];
         auto div3 = ~((1 << (this->bit[4] + this->bit[2])) - 1);
-        for (int32_t i = 0; i < loopCount; i++) {
+        auto mul3 = this->bit[3] - this->bit[4];
+
+        for (int32_t i = 0; i < loopCount; i+=d) {
             {
                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
-                DataCopy(xLocal, xGm[i * this->tileLength], length);
+                DataCopy(xLocal, xGm[i << mul3], length);
                 inQueueX.EnQue(xLocal);
             }
             {
                 LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-                
                 auto j = this->st + i;
                 auto hy = j & div3;
-                auto x = (j & mod1) << this->bit[2];
                 auto w = (j >> div2) & mod2;
+                
+                for(int32_t k = 0; k < this->bs; k++){
+                    auto x = k << this->bit[2];
 
-                // auto j = this->st + i;
-                // auto hy = j / (this->shape[2] * this->shape[3] / length) * (this->shape[2] * this->shape[3] / length);
-                // auto x = j % this->bs * this->shape[2];
-                // auto w = j / this->bs % this->shape[2];
-
-                DataCopy(zGm[(hy ^ x ^ w) * this->tileLength], xLocal, length);
-                // DataCopy(zGm[j * this->tileLength], xLocal, length);
+                    DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[k << mul3], params);
+                }
                 // free output tensor for reuse
                 inQueueX.FreeTensor(xLocal);
             }
@@ -548,6 +554,7 @@ private:
     uint32_t* bit;
     uint32_t batch;
     uint32_t st, ed;
+    uint32_t ALIGN_NUM;
     TransposeParamsExt transposeParams1, transposeParams2;
     LocalTensor<T> signbit;
 };
@@ -585,7 +592,7 @@ extern "C" __global__ __aicore__ void depth_to_space(GM_ADDR x, GM_ADDR y, GM_AD
         op.Process();
     }else if(tiling_data.type == 7){
         KernelDeepToSpace2 <DTYPE_X, 7> op;
-        op.Init(x, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.bs, tiling_data.shape, tiling_data.bit);
+        op.Init(x, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.bs, tiling_data.shape, tiling_data.batch, tiling_data.bit);
         op.Process();
     }
 }

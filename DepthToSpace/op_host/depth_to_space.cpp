@@ -99,13 +99,23 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     // }
 
     if(type == 7){
+        tiling_size = ((ub_size) / BLOCK_SIZE / 2) / NUM;
+        block_size = tiling_size * ALIGN_NUM;
+        block_size = block_size / shape[3] * shape[3];
+        while(shape[2] % (block_size / shape[3])){
+            block_size -= shape[3];
+        }
+        auto batch = block_size / shape[3];
+        tiling.set_batch(batch);
+
         block_size = shape[3] / *context->GetAttrs()->GetInt(0);
-        tiling.set_batch(block_size);
-        auto n = totalLength / block_size;
+        auto n = totalLength / block_size / batch;
         aivNum = ascendcPlatform.GetCoreNum();
         core_size = (n + aivNum - 1) / aivNum;
         aivNum = (n + core_size - 1) / core_size;
         core_remain = n - aivNum * core_size;
+        core_size *= batch;
+        core_remain *= batch;
     }
 
     tiling.set_totalLength(totalLength);
@@ -116,7 +126,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling.set_core_size(core_size);
     tiling.set_core_remain(core_remain);
 
-    // std::cout << aivNum << " " << core_size << " " << core_remain << " " << totalLength << std::endl;
+    std::cout << aivNum << " " << core_size << " " << core_remain << " " << totalLength << std::endl;
     context->SetBlockDim(aivNum);
 
     // auto bs = *context->GetAttrs()->GetInt(0);
