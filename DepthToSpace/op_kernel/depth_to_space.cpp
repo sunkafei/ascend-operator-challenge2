@@ -430,7 +430,7 @@ public:
 
         // pipe alloc memory to queue, the unit is Bytes
         pipe.InitBuffer(inQueueX, BUFFER_NUM, this->tileLength * sizeof(T));
-        pipe.InitBuffer(outQueueZ, BUFFER_NUM, this->tileLength * sizeof(T));
+        // pipe.InitBuffer(outQueueZ, BUFFER_NUM, this->tileLength * sizeof(T));
     }
     __aicore__ inline void Process()
     {
@@ -438,24 +438,31 @@ public:
         int32_t loopCount = this->tileNum;
         auto length = this->tileLength;
         // tiling strategy, pipeline parallel
-        event_t eventIDSToMTE3 = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE2_MTE3));
-        event_t eventIDSToMTE3B = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE3_MTE2));
+                
+        auto mod1 = this->bs - 1;
+        auto mod2 = this->shape[2] - 1;
+        auto div2 = this->bit[4];
+        auto div3 = ~((1 << (this->bit[4] + this->bit[2])) - 1);
         for (int32_t i = 0; i < loopCount; i++) {
-            auto progress = i;
             {
                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
-                DataCopy(xLocal, xGm[progress * this->tileLength], length);
-                SetFlag<HardEvent::MTE2_MTE3>(eventIDSToMTE3);
+                DataCopy(xLocal, xGm[i * this->tileLength], length);
+                inQueueX.EnQue(xLocal);
+            }
+            {
+                LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+                
+                auto j = this->st + i;
+                auto hy = j & div3;
+                auto x = (j & mod1) << this->bit[2];
+                auto w = (j >> div2) & mod2;
 
-                auto i = this->st + progress;
-                auto hy = i / (this->shape[2] * this->shape[3] / length) * (this->shape[2] * this->shape[3] / length);
-                auto x = i % this->bs * this->shape[2];
-                auto w = i / this->bs % this->shape[2];
-                WaitFlag<HardEvent::MTE2_MTE3>(eventIDSToMTE3);
+                // auto j = this->st + i;
+                // auto hy = j / (this->shape[2] * this->shape[3] / length) * (this->shape[2] * this->shape[3] / length);
+                // auto x = j % this->bs * this->shape[2];
+                // auto w = j / this->bs % this->shape[2];
 
                 DataCopy(zGm[(hy ^ x ^ w) * this->tileLength], xLocal, length);
-                SetFlag<HardEvent::MTE3_MTE2>(eventIDSToMTE3B);
-                WaitFlag<HardEvent::MTE3_MTE2>(eventIDSToMTE3B);
                 // DataCopy(zGm[j * this->tileLength], xLocal, length);
                 // free output tensor for reuse
                 inQueueX.FreeTensor(xLocal);
@@ -508,7 +515,7 @@ private:
         // auto div3 = ~(1 << (this->bit[4] + this->bit[2])) - 1;
         // auto i = this->st + progress;
         // auto hy = i & div3;
-        // auto x = i & mod1;
+        // auto x = (i & mod1) << this->bit[2];
         // auto w = (i >> div2) & mod2;
 
         auto i = this->st + progress;
@@ -524,7 +531,8 @@ private:
 private:
     TPipe pipe;
     // create queues for input, in this case depth is equal to buffer num
-    TQue<QuePosition::VECIN, BUFFER_NUM> inQueueX;
+    // TQue<QuePosition::VECIN, BUFFER_NUM> inQueueX;
+    TQueBind<TPosition::VECIN, TPosition::VECOUT, BUFFER_NUM> inQueueX;
     // create queue for output, in this case depth is equal to buffer num
     TQue<QuePosition::VECOUT, BUFFER_NUM> outQueueZ;
     GlobalTensor<T> xGm;
