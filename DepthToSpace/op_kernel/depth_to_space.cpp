@@ -438,22 +438,24 @@ public:
         int32_t loopCount = this->tileNum;
         auto length = this->tileLength;
         // tiling strategy, pipeline parallel
+        event_t eventIDSToMTE3 = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE2_MTE3));
+        event_t eventIDSToMTE3B = static_cast<event_t>(GetTPipePtr()->FetchEventID(HardEvent::MTE3_MTE2));
         for (int32_t i = 0; i < loopCount; i++) {
             auto progress = i;
             {
                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
                 DataCopy(xLocal, xGm[progress * this->tileLength], length);
-                inQueueX.EnQue(xLocal);
-            }
-            {
-                LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+                SetFlag<HardEvent::MTE2_MTE3>(eventIDSToMTE3);
 
                 auto i = this->st + progress;
                 auto hy = i / (this->shape[2] * this->shape[3] / length) * (this->shape[2] * this->shape[3] / length);
                 auto x = i % this->bs * this->shape[2];
                 auto w = i / this->bs % this->shape[2];
+                WaitFlag<HardEvent::MTE2_MTE3>(eventIDSToMTE3);
 
                 DataCopy(zGm[(hy ^ x ^ w) * this->tileLength], xLocal, length);
+                SetFlag<HardEvent::MTE3_MTE2>(eventIDSToMTE3B);
+                WaitFlag<HardEvent::MTE3_MTE2>(eventIDSToMTE3B);
                 // DataCopy(zGm[j * this->tileLength], xLocal, length);
                 // free output tensor for reuse
                 inQueueX.FreeTensor(xLocal);
