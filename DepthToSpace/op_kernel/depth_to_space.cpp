@@ -603,7 +603,11 @@ private:
 extern "C" __global__ __aicore__ void depth_to_space(GM_ADDR x, GM_ADDR y, GM_ADDR workspace, GM_ADDR tiling) {
     GET_TILING_DATA(tiling_data, tiling);
     // TODO: user kernel impl
-    if(tiling_data.type == 0){
+    if(tiling_data.type == 7){
+        KernelDeepToSpace2 <DTYPE_X, 7> op;
+        op.Init(x, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.bs, tiling_data.shape, tiling_data.batch, tiling_data.bit);
+        op.Process();
+    }else if(tiling_data.type == 0){
         KernelDeepToSpace <DTYPE_X, 0> op;
         op.Init(x, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.bs, tiling_data.shape);
         op.Process();
@@ -630,10 +634,6 @@ extern "C" __global__ __aicore__ void depth_to_space(GM_ADDR x, GM_ADDR y, GM_AD
     }else if(tiling_data.type == 6){
         KernelDeepToSpace <DTYPE_X, 6> op;
         op.Init(x, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.bs, tiling_data.shape, tiling_data.bit);
-        op.Process();
-    }else if(tiling_data.type == 7){
-        KernelDeepToSpace2 <DTYPE_X, 7> op;
-        op.Init(x, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.bs, tiling_data.shape, tiling_data.batch, tiling_data.bit);
         op.Process();
     }
 }
