@@ -104,17 +104,17 @@ public:
         TQue<QuePosition::VECOUT, 2> Q_y;
         stage2.InitBuffer(Q_x, 2, sizeof(T) * tile_length);
         stage2.InitBuffer(Q_y, 2, sizeof(T) * tile_length);
-        // mean = Q_mean.AllocTensor<T>();
-        // rstd = Q_rstd.AllocTensor<T>();
-        // Duplicate(rstd, T(0), data_copy_size);
-        // SyncAll();
-        // for (int i = L2; i < R2; ++i) {
-        //     float avg = Gm_mean.GetValue(i);
-        //     rstd.SetValue(i, -avg * avg);
-        // }
-        // DataCopy(Gm_rstd, rstd, data_copy_size);
-        // Q_mean.FreeTensor(mean);
-        // Q_rstd.FreeTensor(rstd);
+        mean = Q_mean.AllocTensor<T>();
+        rstd = Q_rstd.AllocTensor<T>();
+        Duplicate(rstd, T(0), data_copy_size);
+        SyncAll();
+        for (int i = L2; i < R2; ++i) {
+            float avg = Gm_mean.GetValue(i);
+            rstd.SetValue(i, -avg * avg);
+        }
+        DataCopy(Gm_rstd, rstd, data_copy_size);
+        Q_mean.FreeTensor(mean);
+        Q_rstd.FreeTensor(rstd);
 
         auto mean = Q_mean.AllocTensor<T>();
         auto rstd = Q_rstd.AllocTensor<T>();
