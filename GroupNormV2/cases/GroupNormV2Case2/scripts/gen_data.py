@@ -21,6 +21,8 @@ def gen_golden_data_simple():
     input_gamma.tofile("./input/input_gamma.bin")
     input_beta.tofile("./input/input_beta.bin")
     golden.tofile("./output/golden.bin")
+    print("mean:", np.mean(input_x.reshape(input_x.shape[0], -1), axis=1))
+    print("std2:", np.std(input_x.reshape(input_x.shape[0], -1), axis=1) ** 2)
 
 
 if __name__ == "__main__":
