@@ -5,7 +5,7 @@ import os
 
 np.random.seed(123)
 def gen_golden_data_simple(): # 26820
-    input_x = np.random.uniform(-9, 11, [10, 4, 512, 512]).astype(np.float32)
+    input_x = np.random.uniform(-10, 10, [10, 4, 512, 512]).astype(np.float32)
     input_gamma = np.random.uniform(1, 1, [4]).astype(np.float32)
     input_beta = np.random.uniform(0, 0, [4]).astype(np.float32)
     num_groups = np.array([1]).astype(np.int32)
