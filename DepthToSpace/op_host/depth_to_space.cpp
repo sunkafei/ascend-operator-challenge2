@@ -99,7 +99,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     // }
 
     if(type == 7){
-        tiling_size = ((ub_size) / BLOCK_SIZE / 2) / NUM;
+        tiling_size = ((ub_size) / BLOCK_SIZE / 1) / NUM;
         block_size = tiling_size * ALIGN_NUM;
         block_size = block_size / shape[3] * shape[3];
         while(shape[2] % (block_size / shape[3])){
@@ -124,7 +124,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     tiling.set_core_size(core_size);
     tiling.set_core_remain(core_remain);
 
-    // std::cout << aivNum << " " << type << " " << core_size << " " << core_remain << " " << totalLength << std::endl;
+    // std::cout << aivNum << " " << type << " " << core_size << " " << core_remain << " " << core_size + core_remain << " " << totalLength << std::endl;
     context->SetBlockDim(aivNum);
 
     // auto bs = *context->GetAttrs()->GetInt(0);
@@ -193,7 +193,7 @@ public:
 
         AICore()
             .SetTiling(optiling::TilingFunc);
-        AICore().AddConfig("ascend310p");
+        AICore().AddConfig("ascend910b");
 
     }
 };
