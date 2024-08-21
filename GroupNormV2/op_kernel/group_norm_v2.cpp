@@ -1,10 +1,12 @@
 #include "kernel_operator.h"
 using namespace AscendC;
 template<typename T> __aicore__ inline void Reduce(const LocalTensor<T> &x, uint32_t length) {
-    while (length > 1) {
+    while (length > 32 / sizeof(T)) {
         length >>= 1;
         Add(x, x, x[length], length);
+        PipeBarrier<PIPE_V>();
     }
+    BlockReduceSum(x, x, 1, 32 / sizeof(T), 1, 1, 8);
 }
 template<typename T> class GroupNormV2Kernal {
 public:
