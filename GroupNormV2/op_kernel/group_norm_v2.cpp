@@ -40,13 +40,15 @@ public:
         Gm_y.SetGlobalBuffer((__gm__ T*)y, total_size);
         Gm_mean.SetGlobalBuffer((__gm__ T*)mean, batch_size * num_groups);
         Gm_rstd.SetGlobalBuffer((__gm__ T*)rstd, batch_size * num_groups);
-        pipe.InitBuffer(Q_x, 2, sizeof(T) * tile_length);
-        pipe.InitBuffer(Q_y, 2, sizeof(T) * tile_length);
         pipe.InitBuffer(Q_mean, 1, data_copy_size);
         pipe.InitBuffer(Q_rstd, 1, data_copy_size);
         pipe.InitBuffer(B_sumv, data_copy_size);
+        pipe.InitBufPool(stage1, 4 * sizeof(T) * tile_length);
+        pipe.InitBufPool(stage2, 4 * sizeof(T) * tile_length, stage1);
     }
-    __aicore__ inline void Process() { // 6849
+    __aicore__ inline void Preprocess() {
+        TQue<QuePosition::VECIN, 2> Q_x;
+        stage1.InitBuffer(Q_x, 2, 2 * sizeof(T) * tile_length);
         auto sumv = B_sumv.Get<T>();
         auto mean = Q_mean.AllocTensor<T>();
         auto rstd = Q_rstd.AllocTensor<T>();
@@ -54,7 +56,8 @@ public:
         Duplicate(rstd, T(0), data_copy_size);
         float sum = 0, sum2 = 0;
         int last = 0;
-        for (int32_t i = L; i < R; ++i) {
+        for (int32_t i = L; i < R; i += 2) {
+            auto block_length = (i == R - 1 ? tile_length : tile_length * 2);
             auto index = i / group_tiles;
             if (index != last) [[unlikely]] {
                 mean.SetValue(last, sum / group_size);
@@ -64,15 +67,15 @@ public:
             }
             {
                 LocalTensor<T> x = Q_x.AllocTensor<T>();
-                DataCopy(x, Gm_x[i * tile_length], tile_length);
+                DataCopy(x, Gm_x[i * tile_length], block_length);
                 Q_x.EnQue(x);
             }
             {
                 LocalTensor<T> x = Q_x.DeQue<T>();
-                Reduce(sumv, x, tile_length);
+                Reduce(sumv, x, block_length);
                 sum += (float)sumv.GetValue(0);
-                Mul(x, x, x, tile_length);
-                Reduce(sumv, x, tile_length);
+                Mul(x, x, x, block_length);
+                Reduce(sumv, x, block_length);
                 sum2 += (float)sumv.GetValue(0);
                 Q_x.FreeTensor(x);
             }
@@ -84,27 +87,32 @@ public:
         DataCopy(Gm_rstd, rstd, data_copy_size);
         Q_mean.FreeTensor(mean);
         Q_rstd.FreeTensor(rstd);
+        stage1.Reset();
+    }
+    __aicore__ inline void Process() { // 872
+        Preprocess();
+        TQue<QuePosition::VECIN, 2> Q_x;
+        TQue<QuePosition::VECOUT, 2> Q_y;
+        stage2.InitBuffer(Q_x, 2, sizeof(T) * tile_length);
+        stage2.InitBuffer(Q_y, 2, sizeof(T) * tile_length);
+        // mean = Q_mean.AllocTensor<T>();
+        // rstd = Q_rstd.AllocTensor<T>();
+        // Duplicate(rstd, T(0), data_copy_size);
+        // SyncAll();
+        // for (int i = L2; i < R2; ++i) {
+        //     float avg = Gm_mean.GetValue(i);
+        //     rstd.SetValue(i, -avg * avg);
+        // }
+        // DataCopy(Gm_rstd, rstd, data_copy_size);
+        // Q_mean.FreeTensor(mean);
+        // Q_rstd.FreeTensor(rstd);
 
-
-        mean = Q_mean.AllocTensor<T>();
-        rstd = Q_rstd.AllocTensor<T>();
-        Duplicate(rstd, T(0), data_copy_size);
-        SyncAll();
-        for (int i = L2; i < R2; ++i) {
-            float avg = Gm_mean.GetValue(i);
-            rstd.SetValue(i, -avg * avg);
-        }
-        DataCopy(Gm_rstd, rstd, data_copy_size);
-        Q_mean.FreeTensor(mean);
-        Q_rstd.FreeTensor(rstd);
-
-        mean = Q_mean.AllocTensor<T>();
-        rstd = Q_rstd.AllocTensor<T>();
+        auto mean = Q_mean.AllocTensor<T>();
+        auto rstd = Q_rstd.AllocTensor<T>();
         SyncAll();
         SetAtomicNone();
-        last = -1;
         float avg, var, gm, bt;
-        int last2 = -1;
+        int last = -1, last2 = -1;
         for (int i = L; i < R; ++i) {
             auto index = i / group_tiles;
             auto index2 = i * tile_length / channel_size % num_channels;
@@ -141,6 +149,7 @@ public:
         }
         Q_mean.FreeTensor(mean);
         Q_rstd.FreeTensor(rstd);
+        stage2.Reset();
     }
 private:
     GlobalTensor<T> Gm_x, Gm_gamma, Gm_beta, Gm_y, Gm_mean, Gm_rstd;
@@ -149,10 +158,9 @@ private:
     int32_t group_tiles, L2, R2;
     float epsilon;
     TPipe pipe;
-    TQue<QuePosition::VECIN, 2> Q_x;
-    TQue<QuePosition::VECOUT, 2> Q_y;
     TQue<QuePosition::VECOUT, 1> Q_mean, Q_rstd;
     TBuf<QuePosition::VECCALC> B_sumv;
+    TBufPool<TPosition::VECCALC> stage1, stage2;
 };
 template<typename T> class BruteForce {
 public:
