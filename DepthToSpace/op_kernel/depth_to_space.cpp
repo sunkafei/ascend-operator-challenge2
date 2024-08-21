@@ -538,11 +538,11 @@ public:
             }
             {
                 LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+                auto hy = this->st & div3;
                 for(int32_t i = 0; i < st2; i++) {
                     auto j = this->st + i;
-                    auto hy = j & div3;
-                    auto x = (j & mod1) << this->bit[2];
                     auto w = (j >> div2) & mod2;
+                    auto x = (j & mod1) << this->bit[2];
 
                     DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[i << mul3], this->tileLength);
                 }
@@ -579,11 +579,11 @@ public:
             }
             {
                 LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+                auto hy = (this->st + ed2) & div3;
                 for(int32_t i = ed2; i < loopCount; i++) {
                     auto j = this->st + i;
-                    auto hy = j & div3;
-                    auto x = (j & mod1) << this->bit[2];
                     auto w = (j >> div2) & mod2;
+                    auto x = (j & mod1) << this->bit[2];
 
                     DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[(i - ed2) << mul3], this->tileLength);
                 }
