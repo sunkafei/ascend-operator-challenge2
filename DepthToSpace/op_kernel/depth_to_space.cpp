@@ -459,7 +459,7 @@ public:
         {
             {
                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
-                DataCopy(xLocal, xGm[i << mul3], this->tileLength * st2);
+                DataCopy(xLocal, xGm, this->tileLength * st2);
                 inQueueX.EnQue(xLocal);
             }
             {
@@ -502,7 +502,7 @@ public:
         {
             {
                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
-                DataCopy(xLocal, xGm[i << mul3], this->tileLength * (loopCount - ed2));
+                DataCopy(xLocal, xGm[ed2 << mul3], this->tileLength * (loopCount - ed2));
                 inQueueX.EnQue(xLocal);
             }
             {
