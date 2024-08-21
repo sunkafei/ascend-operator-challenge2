@@ -513,7 +513,7 @@ public:
                     auto x = (j & mod1) << this->bit[2];
                     auto w = (j >> div2) & mod2;
 
-                    DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[(i - ed2) << mul3, this->tileLength);
+                    DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[(i - ed2) << mul3], this->tileLength);
                 }
                 // free output tensor for reuse
                 inQueueX.FreeTensor(xLocal);
