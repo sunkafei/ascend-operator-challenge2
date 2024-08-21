@@ -24,7 +24,7 @@ int deviceId = 0;
 OperatorDesc CreateOpDesc()
 {
     // define operator
-    std::vector<int64_t> shape_x {2, 4, 1024, 1024};
+    std::vector<int64_t> shape_x {10, 4, 512, 512};
     std::vector<int64_t> shape_gamma_beta {4};
     
     aclDataType dataType = ACL_FLOAT;
