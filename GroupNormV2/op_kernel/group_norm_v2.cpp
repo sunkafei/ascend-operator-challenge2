@@ -1,11 +1,9 @@
 #include "kernel_operator.h"
 using namespace AscendC;
-template<typename T> __aicore__ inline void Reduce(const LocalTensor<T> &y, const LocalTensor<T> &x, uint32_t length) {
-    length >>= 1;
-    Add(y, x, x[length], length);
+template<typename T> __aicore__ inline void Reduce(const LocalTensor<T> &x, uint32_t length) {
     while (length > 1) {
         length >>= 1;
-        Add(y, y, y[length], length);
+        Add(x, x, x[length], length);
     }
 }
 template<typename T> class GroupNormV2Kernal {
@@ -47,18 +45,22 @@ public:
         Gm_rstd.SetGlobalBuffer((__gm__ T*)rstd, batch_size * num_groups);
         pipe.InitBuffer(Q_mean, 1, data_copy_size);
         pipe.InitBuffer(Q_rstd, 1, data_copy_size);
-        pipe.InitBuffer(B_sumv, sizeof(T) * tile_length);
+        pipe.InitBuffer(B_mean, sizeof(T) * tile_length);
+        pipe.InitBuffer(B_rstd, sizeof(T) * tile_length);
         pipe.InitBufPool(stage1, 4 * sizeof(T) * tile_length);
         pipe.InitBufPool(stage2, 4 * sizeof(T) * tile_length, stage1);
     }
     __aicore__ inline void Preprocess() {
         TQue<QuePosition::VECIN, 2> Q_x;
         stage1.InitBuffer(Q_x, 2, 2 * sizeof(T) * tile_length);
-        auto sumv = B_sumv.Get<T>();
+        auto cache_mean = B_mean.Get<T>();
+        auto cache_rstd = B_rstd.Get<T>();
         auto mean = Q_mean.AllocTensor<T>();
         auto rstd = Q_rstd.AllocTensor<T>();
         Duplicate(mean, T(0), data_copy_size);
         Duplicate(rstd, T(0), data_copy_size);
+        Duplicate(cache_mean, T(0), tile_length);
+        Duplicate(cache_rstd, T(0), tile_length);
         float sum = 0, sum2 = 0;
         int last = 0;
         for (int32_t i = L; i < R; ) {
@@ -74,8 +76,12 @@ public:
                 i += 1;
             }
             if (index != last) [[unlikely]] {
-                mean.SetValue(last, sum / group_size);
-                rstd.SetValue(last, sum2 / group_size);
+                Reduce(cache_mean, tile_length);
+                mean.SetValue(last, (float)cache_mean.GetValue(0) / group_size);
+                Reduce(cache_rstd, tile_length);
+                rstd.SetValue(last, (float)cache_rstd.GetValue(0) / group_size);
+                Duplicate(cache_mean, T(0), tile_length);
+                Duplicate(cache_rstd, T(0), tile_length);
                 last = index;
                 sum = sum2 = 0;
             }
@@ -86,16 +92,22 @@ public:
             }
             {
                 LocalTensor<T> x = Q_x.DeQue<T>();
-                Reduce(sumv, x, block_length);
-                sum += (float)sumv.GetValue(0);
+                Add(cache_mean, cache_mean, x, tile_length);
+                if (block_length == tile_length * 2) [[likely]] {
+                    Add(cache_mean, cache_mean, x[tile_length], tile_length);
+                }
                 Mul(x, x, x, block_length);
-                Reduce(sumv, x, block_length);
-                sum2 += (float)sumv.GetValue(0);
+                Add(cache_rstd, cache_rstd, x, tile_length);
+                if (block_length == tile_length * 2) [[likely]] {
+                    Add(cache_rstd, cache_rstd, x[tile_length], tile_length);
+                }
                 Q_x.FreeTensor(x);
             }
         }
-        mean.SetValue(last, sum / group_size);
-        rstd.SetValue(last, sum2 / group_size);
+        Reduce(cache_mean, tile_length);
+        mean.SetValue(last, (float)cache_mean.GetValue(0) / group_size);
+        Reduce(cache_rstd, tile_length);
+        rstd.SetValue(last, (float)cache_rstd.GetValue(0) / group_size);
         SetAtomicAdd<T>();
         DataCopy(Gm_mean, mean, data_copy_size);
         DataCopy(Gm_rstd, rstd, data_copy_size);
@@ -103,7 +115,7 @@ public:
         Q_rstd.FreeTensor(rstd);
         stage1.Reset();
     }
-    __aicore__ inline void Process() { //884505
+    __aicore__ inline void Process() { //845807
         Preprocess();
         TQue<QuePosition::VECIN, 2> Q_x;
         TQue<QuePosition::VECOUT, 2> Q_y;
@@ -173,7 +185,7 @@ private:
     float epsilon;
     TPipe pipe;
     TQue<QuePosition::VECOUT, 1> Q_mean, Q_rstd;
-    TBuf<QuePosition::VECCALC> B_sumv;
+    TBuf<QuePosition::VECCALC> B_mean, B_rstd;
     TBufPool<TPosition::VECCALC> stage1, stage2;
 };
 template<typename T> class BruteForce {

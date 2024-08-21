@@ -52,7 +52,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context) {
         if (size * sizeofdatatype % 32 != 0) {
             continue;
         }
-        if (size * sizeofdatatype * 5 > ub_size * 0.85) {
+        if (size * sizeofdatatype * 6 > ub_size * 0.9) {
             continue;
         }
         if ((size ^ (size & -size)) != 0) { //single bit
