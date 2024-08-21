@@ -81,24 +81,9 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     uint32_t core_size = (totalLength / aivNum + (ALIGN_NUM * 8) - 1) / (ALIGN_NUM * 8) * (ALIGN_NUM * 8);
     aivNum = (totalLength + core_size - 1) / core_size;
     uint32_t core_remain = totalLength - aivNum * core_size;
-    
-
-    // if(type == 7){
-    //     tiling_size = ((ub_size) / BLOCK_SIZE / 2) / NUM;
-    //     uint32_t block_size = tiling_size * ALIGN_NUM;
-    //     block_size = block_size / shape[3] * shape[3];
-    //     while(shape[2] % (block_size / shape[3])){
-    //         block_size -= shape[3];
-    //     }
-    //     tiling.set_batch(block_size / shape[3]);
-    //     auto n = totalLength / block_size;
-    //     aivNum = ascendcPlatform.GetCoreNum();
-    //     core_size = (n + aivNum - 1) / aivNum;
-    //     aivNum = (n + core_size - 1) / core_size;
-    //     core_remain = n - aivNum * core_size;
-    // }
 
     if(type == 7){
+        if(*context->GetAttrs()->GetInt(0) == 2) type = 8;
         tiling_size = ((ub_size) / BLOCK_SIZE / 1) / NUM;
         block_size = tiling_size * ALIGN_NUM;
         block_size = block_size / shape[3] * shape[3];
@@ -175,25 +160,25 @@ class DepthToSpace : public OpDef {
 public:
     explicit DepthToSpace(const char* name) : OpDef(name)
     {
-        Input("x")
+        this->Input("x")
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT, ge::DT_FLOAT16, ge::DT_INT32, ge::DT_INT8})
             .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
-        Output("y")
+        this->Output("y")
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT, ge::DT_FLOAT16, ge::DT_INT32, ge::DT_INT8})
             .Format({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND})
             .UnknownShapeFormat({ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND, ge::FORMAT_ND});
-        Attr("block_size").Int();
-        Attr("mode").AttrType(OPTIONAL).String("DCR");
-        Attr("data_format").AttrType(OPTIONAL).String("NHWC");
+        this->Attr("block_size").Int();
+        this->Attr("mode").AttrType(OPTIONAL).String("DCR");
+        this->Attr("data_format").AttrType(OPTIONAL).String("NHWC");
 
-        SetInferShape(ge::InferShape);
+        this->SetInferShape(ge::InferShape);
 
-        AICore()
+        this->AICore()
             .SetTiling(optiling::TilingFunc);
-        AICore().AddConfig("ascend910b");
+        this->AICore().AddConfig("ascend310p");
 
     }
 };

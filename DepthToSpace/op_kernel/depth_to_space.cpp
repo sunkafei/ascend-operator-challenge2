@@ -274,132 +274,6 @@ private:
     LocalTensor<T> signbit;
 };
 
-// template<typename T, unsigned opType> class KernelDeepToSpace2 {
-// public:
-//     __aicore__ inline KernelDeepToSpace2() {}
-//     __aicore__ inline void Init(GM_ADDR x, GM_ADDR z, uint32_t totalLength, uint32_t ALIGN_NUM, uint32_t block_size, uint32_t core_size, uint32_t core_remain, uint32_t bs, uint32_t* shape, uint32_t batch)
-//     {
-//         ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
-//         this->totalLength = totalLength;
-//         this->blockLength = core_size + (GetBlockNum() == GetBlockIdx() + 1 ? core_remain : 0);
-//         this->batch = batch;
-
-//         this->st = core_size * GetBlockIdx();
-//         this->ed = this->st + this->blockLength;
-
-//         this->tileLength = block_size;
-
-//         this->bs = bs;
-//         this->shape = shape;
-
-//         auto startPointer = core_size * GetBlockIdx() * block_size;
-//         this->startPointer = startPointer;
-
-//         // get start index for current core, core parallel
-//         xGm.SetGlobalBuffer((__gm__ T*)x + startPointer, block_size * core_size);
-//         zGm.SetGlobalBuffer((__gm__ T*)z, totalLength);
-
-//         this->tileNum = core_size / batch;
-
-//         this->transposeParams1.nSize = 1;
-//         this->transposeParams1.cSize = batch;
-//         this->transposeParams1.hSize = 1;
-//         this->transposeParams1.wSize = shape[3];
-//         this->transposeParams1.transposeType = TransposeType::TRANSPOSE_NCHW2NHWC;
-
-//         this->transposeParams2.nSize = this->bs;
-//         this->transposeParams2.cSize = shape[3] / this->bs;
-//         this->transposeParams2.hSize = 1;
-//         this->transposeParams2.wSize = batch;
-//         this->transposeParams2.transposeType = TransposeType::TRANSPOSE_NCHW2NHWC;
-
-//         // pipe alloc memory to queue, the unit is Bytes
-//         pipe.InitBuffer(inQueueX, BUFFER_NUM, this->tileLength * sizeof(T));
-//         pipe.InitBuffer(outQueueZ, BUFFER_NUM, this->tileLength * sizeof(T));
-//         pipe.InitBuffer(tmpQueue, BUFFER_NUM, this->tileLength * sizeof(T));
-//     }
-//     __aicore__ inline void Process()
-//     {
-        
-//         // loop count need to be doubled, due to double buffer
-//         int32_t loopCount = this->tileNum;
-//         // tiling strategy, pipeline parallel
-//         for (int32_t i = 0; i < loopCount-1; i++) {
-//             CopyIn(i, this->tileLength);
-//             Compute(i, this->tileLength);
-//             CopyOut(i, this->tileLength);
-//         }
-//         auto length = this->ed - this->st - this->tileLength * (loopCount - 1);
-//         CopyIn(loopCount - 1, length);
-//         Compute(loopCount - 1, length);
-//         CopyOut(loopCount - 1, length);
-//     }
-
-// private:
-//     __aicore__ inline void CopyIn(int32_t progress, uint32_t length)
-//     {
-//         // alloc tensor from queue memory
-//         LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
-//         // copy progress_th tile from global tensor to local tensor
-//         DataCopy(xLocal, xGm[progress * this->tileLength], length);
-//         // enque input tensors to VECIN queue
-//         inQueueX.EnQue(xLocal);
-//     }
-//     __aicore__ inline void Compute(int32_t progress, uint32_t length)
-//     {
-//         // deque input tensors from VECIN queue
-//         LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-//         LocalTensor<T> zLocal = outQueueZ.AllocTensor<T>();
-//         LocalTensor<uint8_t> stackBuffer = tmpQueue.AllocTensor<uint8_t>();
-
-//         Transpose(xLocal, xLocal, stackBuffer, this->transposeParams1);
-//         Transpose(zLocal, xLocal, stackBuffer, this->transposeParams2);
-
-//         // enque the output tensor to VECOUT queue
-//         outQueueZ.EnQue<T>(zLocal);
-//         // free input tensors for reuse
-//         inQueueX.FreeTensor(xLocal);
-//     }
-//     __aicore__ inline void CopyOut(int32_t progress, uint32_t length)
-//     {
-//         // deque output tensor from VECOUT queue
-//         LocalTensor<T> zLocal = outQueueZ.DeQue<T>();
-//         // copy progress_th tile from local tensor to global tensor
-//         length /= this->bs;
-
-//         auto bh = (this->st + progress) * this->batch / this->shape[2];
-//         auto w = (this->st + progress) * this->batch % this->shape[2];
-//         auto pointer = bh * this->shape[2] * this->shape[3] + w * shape[3] / this->bs;
-
-//         for(int i=0;i<this->bs;i++){
-//             DataCopy(zGm[pointer + i * this->shape[2] * this->shape[3] / this->bs], zLocal[i * length], length);
-//         }
-//         // free output tensor for reuse
-//         outQueueZ.FreeTensor(zLocal);
-//     }
-
-// private:
-//     TPipe pipe;
-//     // create queues for input, in this case depth is equal to buffer num
-//     TQue<QuePosition::VECIN, BUFFER_NUM> inQueueX;
-//     // create queue for output, in this case depth is equal to buffer num
-//     TQue<QuePosition::VECOUT, BUFFER_NUM> outQueueZ;
-//     TQue<QuePosition::VECCALC, BUFFER_NUM> tmpQueue;
-//     GlobalTensor<T> xGm;
-//     GlobalTensor<T> zGm;
-//     uint32_t blockLength;
-//     uint32_t tileNum;
-//     uint32_t tileLength;
-//     uint32_t totalLength;
-//     uint32_t startPointer;
-//     uint32_t bs;
-//     uint32_t* shape;
-//     uint32_t batch;
-//     uint32_t st, ed;
-//     TransposeParamsExt transposeParams1, transposeParams2;
-//     LocalTensor<T> signbit;
-// };
-
 template<typename T, unsigned opType> class KernelDeepToSpace2 {
 public:
     __aicore__ inline KernelDeepToSpace2() {}
@@ -602,10 +476,146 @@ private:
     LocalTensor<T> signbit;
 };
 
+template<typename T, unsigned opType> class KernelDeepToSpace3 {
+public:
+    __aicore__ inline KernelDeepToSpace3() {}
+    __aicore__ inline void Init(GM_ADDR x, GM_ADDR z, uint32_t totalLength, uint32_t ALIGN_NUM, uint32_t block_size, uint32_t core_size, uint32_t core_remain, uint32_t bs, uint32_t* shape, uint32_t batch, uint32_t* bit=nullptr)
+    {
+        ASSERT(GetBlockNum() != 0 && "block dim can not be zero!");
+        this->totalLength = totalLength;
+        this->blockLength = core_size + (GetBlockNum() == GetBlockIdx() + 1 ? core_remain : 0);
+        this->bit = bit;
+        this->core_size = core_size;
+
+        this->st = core_size * GetBlockIdx();
+        this->ed = this->st + this->blockLength;
+
+        this->tileLength = block_size;
+
+        this->ALIGN_NUM = ALIGN_NUM;
+        this->shape = shape;
+        this->batch = batch;
+
+        this->startPointer = core_size * GetBlockIdx() * block_size;
+
+        // get start index for current core, core parallel
+        xGm.SetGlobalBuffer((__gm__ T*)x + this->startPointer, block_size * this->blockLength);
+        zGm.SetGlobalBuffer((__gm__ T*)z, totalLength);
+
+        this->tileNum = this->blockLength;
+
+        pipe.InitBuffer(inQueueX, BUFFER_NUM, this->batch * this->bs * this->tileLength * sizeof(T));
+    }
+    __aicore__ inline void Process()
+    {
+        int32_t loopCount = this->tileNum;
+        auto length = this->batch * this->bs * this->tileLength;
+        auto length2 = length / this->bs;
+        auto d = this->batch * this->bs;
+
+        DataCopyParams params;
+        params.blockCount = this->batch;
+        params.blockLen = this->tileLength / this->ALIGN_NUM;
+        params.srcStride = this->tileLength / this->ALIGN_NUM;
+        params.dstStride = 0;
+                
+        const auto mod1 = 1;
+        auto mod2 = this->shape[2] - 1;
+        const auto div2 = 1;
+        auto div3 = ~((1 << (1 + this->bit[2])) - 1);
+        auto mul3 = this->bit[3] - 1;
+        auto k3 = 1 << mul3;
+        auto k3x = 1 << (mul3 + this->bit[2]);
+
+        auto st2 = (this->st + d - 1) / d * d - this->st;
+        auto ed2 = (loopCount - st2) / d * d;
+
+        for(int32_t i = 0; i < st2; i++) {
+            {
+                LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
+                DataCopy(xLocal, xGm[i << mul3], this->tileLength);
+                inQueueX.EnQue(xLocal);
+            }
+            {
+                LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+                auto j = this->st + i;
+                auto hy = j & div3;
+                auto x = (j & mod1) << this->bit[2];
+                auto w = (j >> div2) & mod2;
+                
+                DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal, this->tileLength);
+                // free output tensor for reuse
+                inQueueX.FreeTensor(xLocal);
+            }
+        }
+
+        for (int32_t i = st2; i < ed2; i+=d) {
+            {
+                LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
+                DataCopy(xLocal, xGm[i << mul3], length);
+                inQueueX.EnQue(xLocal);
+            }
+            {
+                LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+                auto j = this->st + i;
+                auto hy = j & div3;
+                auto w = (j >> div2) & mod2;
+                auto hyw = (hy ^ w) << mul3;
+                
+                DataCopy(zGm[hyw], xLocal, params);
+                DataCopy(zGm[hyw ^ k3x], xLocal[k3], params);
+                // free output tensor for reuse
+                inQueueX.FreeTensor(xLocal);
+            }
+        }
+
+        for(int32_t i = ed2; i < loopCount; i++) {
+            {
+                LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
+                DataCopy(xLocal, xGm[i << mul3], this->tileLength);
+                inQueueX.EnQue(xLocal);
+            }
+            {
+                LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+                auto j = this->st + i;
+                auto hy = j & div3;
+                auto x = (j & mod1) << this->bit[2];
+                auto w = (j >> div2) & mod2;
+                
+                DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal, this->tileLength);
+                // free output tensor for reuse
+                inQueueX.FreeTensor(xLocal);
+            }
+        }
+    }
+
+private:
+    TPipe pipe;
+    TQueBind<TPosition::VECIN, TPosition::VECOUT, BUFFER_NUM> inQueueX;
+    GlobalTensor<T> xGm;
+    GlobalTensor<T> zGm;
+    uint32_t blockLength;
+    uint32_t core_size;
+    uint32_t tileNum;
+    uint32_t tileLength;
+    uint32_t totalLength;
+    uint32_t startPointer;
+    const uint32_t bs = 2;
+    uint32_t* shape;
+    uint32_t* bit;
+    uint32_t batch;
+    uint32_t st, ed;
+    uint32_t ALIGN_NUM;
+};
+
 extern "C" __global__ __aicore__ void depth_to_space(GM_ADDR x, GM_ADDR y, GM_ADDR workspace, GM_ADDR tiling) {
     GET_TILING_DATA(tiling_data, tiling);
     // TODO: user kernel impl
-    if(tiling_data.type == 7){
+    if(tiling_data.type == 8){
+        KernelDeepToSpace3 <DTYPE_X, 8> op;
+        op.Init(x, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.bs, tiling_data.shape, tiling_data.batch, tiling_data.bit);
+        op.Process();
+    }else if(tiling_data.type == 7){
         KernelDeepToSpace2 <DTYPE_X, 7> op;
         op.Init(x, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.bs, tiling_data.shape, tiling_data.batch, tiling_data.bit);
         op.Process();
