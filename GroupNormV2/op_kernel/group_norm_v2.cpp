@@ -1,7 +1,12 @@
 #include "kernel_operator.h"
 using namespace AscendC;
-template<typename T> __aicore__ inline void Reduce(const LocalTensor<T> &y, const LocalTensor<T> &x, uint32_t group_size) {
-    Sum(y, x, SumParams{1, group_size, group_size});
+template<typename T> __aicore__ inline void Reduce(const LocalTensor<T> &y, const LocalTensor<T> &x, uint32_t length) {
+    length >>= 1;
+    Add(y, x, x[length], length);
+    while (length > 1) {
+        length >>= 1;
+        Add(y, y, y[length], length);
+    }
 }
 template<typename T> class GroupNormV2Kernal {
 public:
@@ -42,7 +47,7 @@ public:
         Gm_rstd.SetGlobalBuffer((__gm__ T*)rstd, batch_size * num_groups);
         pipe.InitBuffer(Q_mean, 1, data_copy_size);
         pipe.InitBuffer(Q_rstd, 1, data_copy_size);
-        pipe.InitBuffer(B_sumv, data_copy_size);
+        pipe.InitBuffer(B_sumv, sizeof(T) * tile_length);
         pipe.InitBufPool(stage1, 4 * sizeof(T) * tile_length);
         pipe.InitBufPool(stage2, 4 * sizeof(T) * tile_length, stage1);
     }
@@ -98,7 +103,7 @@ public:
         Q_rstd.FreeTensor(rstd);
         stage1.Reset();
     }
-    __aicore__ inline void Process() { // 820
+    __aicore__ inline void Process() { //884505
         Preprocess();
         TQue<QuePosition::VECIN, 2> Q_x;
         TQue<QuePosition::VECOUT, 2> Q_y;
