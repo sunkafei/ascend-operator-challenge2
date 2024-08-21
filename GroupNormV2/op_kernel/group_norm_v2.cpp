@@ -69,8 +69,8 @@ public:
                 i += 1;
             }
             if (index != last) [[unlikely]] {
-                mean.SetValue(last, sum);
-                rstd.SetValue(last, sum2);
+                mean.SetValue(last, sum / group_size);
+                rstd.SetValue(last, sum2 / group_size);
                 last = index;
                 sum = sum2 = 0;
             }
@@ -82,10 +82,10 @@ public:
             {
                 LocalTensor<T> x = Q_x.DeQue<T>();
                 Reduce(sumv, x, block_length);
-                sum += (float)sumv.GetValue(0) / group_size;
+                sum += (float)sumv.GetValue(0);
                 Mul(x, x, x, block_length);
                 Reduce(sumv, x, block_length);
-                sum2 += (float)sumv.GetValue(0) / group_size;
+                sum2 += (float)sumv.GetValue(0);
                 Q_x.FreeTensor(x);
             }
         }
