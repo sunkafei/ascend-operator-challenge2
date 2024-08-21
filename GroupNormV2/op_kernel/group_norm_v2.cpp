@@ -56,27 +56,36 @@ public:
         Duplicate(rstd, T(0), data_copy_size);
         float sum = 0, sum2 = 0;
         int last = 0;
-        for (int32_t i = L; i < R; i += 2) {
-            auto block_length = (i == R - 1 ? tile_length : tile_length * 2);
+        for (int32_t i = L; i < R; ) {
             auto index = i / group_tiles;
+            auto offset = i * tile_length;
+            int32_t block_length;
+            if (i != R - 1 && i % group_tiles != group_tiles - 1) [[likely]] {
+                block_length = tile_length * 2;
+                i += 2;
+            }
+            else {
+                block_length = tile_length;
+                i += 1;
+            }
             if (index != last) [[unlikely]] {
-                mean.SetValue(last, sum / group_size);
-                rstd.SetValue(last, sum2 / group_size);
+                mean.SetValue(last, sum);
+                rstd.SetValue(last, sum2);
                 last = index;
                 sum = sum2 = 0;
             }
             {
                 LocalTensor<T> x = Q_x.AllocTensor<T>();
-                DataCopy(x, Gm_x[i * tile_length], block_length);
+                DataCopy(x, Gm_x[offset], block_length);
                 Q_x.EnQue(x);
             }
             {
                 LocalTensor<T> x = Q_x.DeQue<T>();
                 Reduce(sumv, x, block_length);
-                sum += (float)sumv.GetValue(0);
+                sum += (float)sumv.GetValue(0) / group_size;
                 Mul(x, x, x, block_length);
                 Reduce(sumv, x, block_length);
-                sum2 += (float)sumv.GetValue(0);
+                sum2 += (float)sumv.GetValue(0) / group_size;
                 Q_x.FreeTensor(x);
             }
         }
