@@ -551,25 +551,6 @@ public:
             }
         }
 
-        // for(int32_t i = 0; i < st2; i++) {
-        //     {
-        //         LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
-        //         DataCopy(xLocal, xGm[i << mul3], this->tileLength);
-        //         inQueueX.EnQue(xLocal);
-        //     }
-        //     {
-        //         LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-        //         auto j = this->st + i;
-        //         auto hy = j & div3;
-        //         auto x = (j & mod1) << this->bit[2];
-        //         auto w = (j >> div2) & mod2;
-                
-        //         DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal, this->tileLength);
-        //         // free output tensor for reuse
-        //         inQueueX.FreeTensor(xLocal);
-        //     }
-        // }
-
         for (int32_t i = st2; i < ed2; i+=d) {
             {
                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
