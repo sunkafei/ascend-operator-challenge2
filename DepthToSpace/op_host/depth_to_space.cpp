@@ -95,7 +95,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
 
         block_size = shape[3] / *context->GetAttrs()->GetInt(0);
         auto n = totalLength / block_size;
-        aivNum = ascendcPlatform.GetCoreNum() * 11;
+        aivNum = ascendcPlatform.GetCoreNum() * 4;
         core_size = (n + aivNum - 1) / aivNum;
         aivNum = (n + core_size - 1) / core_size;
         core_remain = n - aivNum * core_size;
