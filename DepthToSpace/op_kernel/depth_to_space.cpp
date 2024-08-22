@@ -530,7 +530,7 @@ public:
         auto st2 = (this->st + d - 1) / d * d - this->st;
         auto ed2 = (loopCount - st2) / d * d;
 
-        {
+        if(st2) {
             {
                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
                 DataCopy(xLocal, xGm, this->tileLength * st2);
@@ -538,9 +538,9 @@ public:
             }
             {
                 LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-                auto hy = this->st & div3;
                 for(int32_t i = 0; i < st2; i++) {
                     auto j = this->st + i;
+                    auto hy = j & div3;
                     auto w = (j >> div2) & mod2;
                     auto x = (j & mod1) << this->bit[2];
 
@@ -550,6 +550,25 @@ public:
                 inQueueX.FreeTensor(xLocal);
             }
         }
+
+        // for(int32_t i = 0; i < st2; i++) {
+        //     {
+        //         LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
+        //         DataCopy(xLocal, xGm[i << mul3], this->tileLength);
+        //         inQueueX.EnQue(xLocal);
+        //     }
+        //     {
+        //         LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+        //         auto j = this->st + i;
+        //         auto hy = j & div3;
+        //         auto x = (j & mod1) << this->bit[2];
+        //         auto w = (j >> div2) & mod2;
+                
+        //         DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal, this->tileLength);
+        //         // free output tensor for reuse
+        //         inQueueX.FreeTensor(xLocal);
+        //     }
+        // }
 
         for (int32_t i = st2; i < ed2; i+=d) {
             {
@@ -571,7 +590,7 @@ public:
             }
         }
 
-        {
+        if(ed2 < loopCount) {
             {
                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
                 DataCopy(xLocal, xGm[ed2 << mul3], this->tileLength * (loopCount - ed2));
@@ -579,9 +598,9 @@ public:
             }
             {
                 LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-                auto hy = (this->st + ed2) & div3;
                 for(int32_t i = ed2; i < loopCount; i++) {
                     auto j = this->st + i;
+                    auto hy = j & div3;
                     auto w = (j >> div2) & mod2;
                     auto x = (j & mod1) << this->bit[2];
 
