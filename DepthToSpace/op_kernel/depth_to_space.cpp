@@ -504,8 +504,10 @@ public:
 
         this->tileNum = this->blockLength;
 
-        pipe.InitBuffer(inQueueX, BUFFER_NUM, this->batch * this->tileLength * sizeof(T));
-        pipe.InitBuffer(inQueueX2, BUFFER_NUM, this->batch * this->tileLength * sizeof(T));
+        pipe.InitBufPool(tbufPool, BUFFER_NUM * this->batch * this->bs * this->tileLength * sizeof(T));
+        tbufPool.InitBuffer(inQueueX3, BUFFER_NUM, this->batch * this->bs * this->tileLength * sizeof(T));
+        // pipe.InitBuffer(inQueueX, BUFFER_NUM, this->batch * this->tileLength * sizeof(T));
+        // pipe.InitBuffer(inQueueX2, BUFFER_NUM, this->batch * this->tileLength * sizeof(T));
     }
     __aicore__ inline void Process()
     {
@@ -528,31 +530,55 @@ public:
         auto k3 = 1 << mul3;
         auto k3x = 1 << (mul3 + this->bit[2]);
 
-        // auto st2 = (this->st + d - 1) / d * d - this->st;
-        // auto ed2 = (loopCount - st2) / d * d;
+        auto st2 = (this->st + d - 1) / d * d - this->st;
+        auto ed2 = (loopCount - st2) / d * d + st2;
 
-//         if(st2) {
-//             {
-//                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
-//                 DataCopy(xLocal, xGm, this->tileLength * st2);
-//                 inQueueX.EnQue(xLocal);
-//             }
-//             {
-//                 LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-//                 for(int32_t i = 0; i < st2; i++) {
-//                     auto j = this->st + i;
-//                     auto hy = j & div3;
-//                     auto w = (j >> div2) & mod2;
-//                     auto x = (j & mod1) << this->bit[2];
+        if(st2) {
+            {
+                LocalTensor<T> xLocal = inQueueX3.AllocTensor<T>();
+                DataCopy(xLocal, xGm, this->tileLength * st2);
+                inQueueX3.EnQue(xLocal);
+            }
+            {
+                LocalTensor<T> xLocal = inQueueX3.DeQue<T>();
+                for(int32_t i = 0; i < st2; i++) {
+                    auto j = this->st + i;
+                    auto hy = j & div3;
+                    auto w = (j >> div2) & mod2;
+                    auto x = (j & mod1) << this->bit[2];
 
-//                     DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[i << mul3], this->tileLength);
-//                 }
-//                 // free output tensor for reuse
-//                 inQueueX.FreeTensor(xLocal);
-//             }
-//         }
+                    DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[i << mul3], this->tileLength);
+                }
+                // free output tensor for reuse
+                inQueueX3.FreeTensor(xLocal);
+            }
+        }
 
-        for (int32_t i = 0; i < loopCount; i+=d) {
+        if(ed2 < loopCount) {
+            {
+                LocalTensor<T> xLocal = inQueueX3.AllocTensor<T>();
+                DataCopy(xLocal, xGm[ed2 << mul3], this->tileLength * (loopCount - ed2));
+                inQueueX3.EnQue(xLocal);
+            }
+            {
+                LocalTensor<T> xLocal = inQueueX3.DeQue<T>();
+                for(int32_t i = ed2; i < loopCount; i++) {
+                    auto j = this->st + i;
+                    auto hy = j & div3;
+                    auto w = (j >> div2) & mod2;
+                    auto x = (j & mod1) << this->bit[2];
+
+                    DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[(i - ed2) << mul3], this->tileLength);
+                }
+                // free output tensor for reuse
+                inQueueX3.FreeTensor(xLocal);
+            }
+        }
+        tbufPool.Reset();
+        tbufPool.InitBuffer(inQueueX, BUFFER_NUM, this->batch * this->tileLength * sizeof(T));
+        tbufPool.InitBuffer(inQueueX2, BUFFER_NUM, this->batch * this->tileLength * sizeof(T));
+
+        for (int32_t i = st2; i < ed2; i+=d) {
             auto j = this->st + i;
             auto hy = j & div3;
             auto w = (j >> div2) & mod2;
@@ -574,33 +600,14 @@ public:
                 inQueueX2.FreeTensor(xLocal2);
             }
         }
-
-//         if(ed2 < loopCount) {
-//             {
-//                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
-//                 DataCopy(xLocal, xGm[ed2 << mul3], this->tileLength * (loopCount - ed2));
-//                 inQueueX.EnQue(xLocal);
-//             }
-//             {
-//                 LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-//                 for(int32_t i = ed2; i < loopCount; i++) {
-//                     auto j = this->st + i;
-//                     auto hy = j & div3;
-//                     auto w = (j >> div2) & mod2;
-//                     auto x = (j & mod1) << this->bit[2];
-
-//                     DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[(i - ed2) << mul3], this->tileLength);
-//                 }
-//                 // free output tensor for reuse
-//                 inQueueX.FreeTensor(xLocal);
-//             }
-//         }
     }
 
 private:
     TPipe pipe;
+    TBufPool<TPosition::VECCALC> tbufPool;
     TQueBind<TPosition::VECIN, TPosition::VECOUT, BUFFER_NUM> inQueueX;
     TQueBind<TPosition::VECIN, TPosition::VECOUT, BUFFER_NUM> inQueueX2;
+    TQueBind<TPosition::VECIN, TPosition::VECOUT, BUFFER_NUM> inQueueX3;
     GlobalTensor<T> xGm;
     GlobalTensor<T> zGm;
     uint32_t blockLength;
