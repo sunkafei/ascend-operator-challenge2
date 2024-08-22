@@ -62,7 +62,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
             type = 6;
         }
     }
-    tiling.set_type(type);
     // std::cout << mode << " " << format << " " << type << std::endl;
 
     uint32_t totalLength = context->GetInputTensor(0)->GetShapeSize();
@@ -101,6 +100,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         core_remain = n - aivNum * core_size;
     }
 
+    tiling.set_type(type);
     tiling.set_totalLength(totalLength);
     tiling.set_ALIGN_NUM(ALIGN_NUM);
     tiling.set_tiling_size(tiling_size);
