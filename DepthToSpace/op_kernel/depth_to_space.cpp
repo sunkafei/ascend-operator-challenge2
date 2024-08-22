@@ -1,6 +1,6 @@
 #include "kernel_operator.h"
 using namespace AscendC;
-constexpr int32_t BUFFER_NUM = 4;                                     // tensor num for each queue
+constexpr int32_t BUFFER_NUM = 2;                                     // tensor num for each queue
 
 template<typename T, unsigned opType> class KernelDeepToSpace {
 public:
@@ -504,7 +504,7 @@ public:
 
         this->tileNum = this->blockLength;
 
-        pipe.InitBuffer(inQueueX, BUFFER_NUM, this->batch * this->bs * this->tileLength * sizeof(T));
+        pipe.InitBuffer(inQueueX, BUFFER_NUM, this->batch * this->tileLength * sizeof(T));
         pipe.InitBuffer(inQueueX2, BUFFER_NUM, this->batch * this->tileLength * sizeof(T));
     }
     __aicore__ inline void Process()
@@ -528,77 +528,73 @@ public:
         auto k3 = 1 << mul3;
         auto k3x = 1 << (mul3 + this->bit[2]);
 
-        auto st2 = (this->st + d - 1) / d * d - this->st;
-        auto ed2 = (loopCount - st2) / d * d;
+        // auto st2 = (this->st + d - 1) / d * d - this->st;
+        // auto ed2 = (loopCount - st2) / d * d;
 
-        if(st2) {
-            {
-                LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
-                DataCopy(xLocal, xGm, this->tileLength * st2);
-                inQueueX.EnQue(xLocal);
-            }
-            {
-                LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-                for(int32_t i = 0; i < st2; i++) {
-                    auto j = this->st + i;
-                    auto hy = j & div3;
-                    auto w = (j >> div2) & mod2;
-                    auto x = (j & mod1) << this->bit[2];
+//         if(st2) {
+//             {
+//                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
+//                 DataCopy(xLocal, xGm, this->tileLength * st2);
+//                 inQueueX.EnQue(xLocal);
+//             }
+//             {
+//                 LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+//                 for(int32_t i = 0; i < st2; i++) {
+//                     auto j = this->st + i;
+//                     auto hy = j & div3;
+//                     auto w = (j >> div2) & mod2;
+//                     auto x = (j & mod1) << this->bit[2];
 
-                    DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[i << mul3], this->tileLength);
-                }
-                // free output tensor for reuse
-                inQueueX.FreeTensor(xLocal);
-            }
-        }
+//                     DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[i << mul3], this->tileLength);
+//                 }
+//                 // free output tensor for reuse
+//                 inQueueX.FreeTensor(xLocal);
+//             }
+//         }
 
-        for (int32_t i = st2; i < ed2; i+=d) {
+        for (int32_t i = 0; i < loopCount; i+=d) {
             auto j = this->st + i;
             auto hy = j & div3;
             auto w = (j >> div2) & mod2;
             auto hyw = (hy ^ w) << mul3;
             {
                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
-                DataCopy(xLocal, xGm[i << mul3], params);
-                inQueueX.EnQue(xLocal);
-            }
-            {
-                LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-                DataCopy(zGm[hyw], xLocal, length2);
-                inQueueX.FreeTensor(xLocal);
-            }
-            {
                 LocalTensor<T> xLocal2 = inQueueX2.AllocTensor<T>();
+                DataCopy(xLocal, xGm[i << mul3], params);
                 DataCopy(xLocal2, xGm[(i + 1) << mul3], params);
+                inQueueX.EnQue(xLocal);
                 inQueueX2.EnQue(xLocal2);
             }
             {
+                LocalTensor<T> xLocal = inQueueX.DeQue<T>();
                 LocalTensor<T> xLocal2 = inQueueX2.DeQue<T>();
+                DataCopy(zGm[hyw], xLocal, length2);
                 DataCopy(zGm[hyw ^ k3x], xLocal2, length2);
+                inQueueX.FreeTensor(xLocal);
                 inQueueX2.FreeTensor(xLocal2);
             }
         }
 
-        if(ed2 < loopCount) {
-            {
-                LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
-                DataCopy(xLocal, xGm[ed2 << mul3], this->tileLength * (loopCount - ed2));
-                inQueueX.EnQue(xLocal);
-            }
-            {
-                LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-                for(int32_t i = ed2; i < loopCount; i++) {
-                    auto j = this->st + i;
-                    auto hy = j & div3;
-                    auto w = (j >> div2) & mod2;
-                    auto x = (j & mod1) << this->bit[2];
+//         if(ed2 < loopCount) {
+//             {
+//                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
+//                 DataCopy(xLocal, xGm[ed2 << mul3], this->tileLength * (loopCount - ed2));
+//                 inQueueX.EnQue(xLocal);
+//             }
+//             {
+//                 LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+//                 for(int32_t i = ed2; i < loopCount; i++) {
+//                     auto j = this->st + i;
+//                     auto hy = j & div3;
+//                     auto w = (j >> div2) & mod2;
+//                     auto x = (j & mod1) << this->bit[2];
 
-                    DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[(i - ed2) << mul3], this->tileLength);
-                }
-                // free output tensor for reuse
-                inQueueX.FreeTensor(xLocal);
-            }
-        }
+//                     DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[(i - ed2) << mul3], this->tileLength);
+//                 }
+//                 // free output tensor for reuse
+//                 inQueueX.FreeTensor(xLocal);
+//             }
+//         }
     }
 
 private:

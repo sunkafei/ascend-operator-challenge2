@@ -10,7 +10,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
 {
 
     DepthToSpaceTilingData tiling;
-    constexpr int32_t NUM = 4;
+    constexpr int32_t NUM = 2;
     uint32_t sizeofdatatype;
     uint32_t totalLengthAligned;
     auto ascendcPlatform = platform_ascendc::PlatformAscendC(context->GetPlatformInfo());
@@ -83,7 +83,6 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
 
     if(type == 7){
         if(*context->GetAttrs()->GetInt(0) == 2) type = 8;
-        auto NUM = 4 + 2;
         tiling_size = ((ub_size) / BLOCK_SIZE / 1) / NUM;
         block_size = tiling_size * ALIGN_NUM;
         block_size = block_size / shape[3] * shape[3];
@@ -94,11 +93,13 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
         tiling.set_batch(batch);
 
         block_size = shape[3] / *context->GetAttrs()->GetInt(0);
-        auto n = totalLength / block_size;
+        auto n = totalLength / block_size / batch / *context->GetAttrs()->GetInt(0);
         aivNum = ascendcPlatform.GetCoreNum();
         core_size = (n + aivNum - 1) / aivNum;
         aivNum = (n + core_size - 1) / core_size;
         core_remain = n - aivNum * core_size;
+        core_size *= batch * *context->GetAttrs()->GetInt(0);
+        core_remain *= batch * *context->GetAttrs()->GetInt(0);
     }
 
     tiling.set_type(type);
