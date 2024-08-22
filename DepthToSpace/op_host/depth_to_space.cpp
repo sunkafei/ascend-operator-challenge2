@@ -83,6 +83,7 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
 
     if(type == 7){
         if(*context->GetAttrs()->GetInt(0) == 2) type = 8;
+        auto NUM = 4 + 2;
         tiling_size = ((ub_size) / BLOCK_SIZE / 1) / NUM;
         block_size = tiling_size * ALIGN_NUM;
         block_size = block_size / shape[3] * shape[3];

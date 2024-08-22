@@ -504,7 +504,7 @@ public:
 
         this->tileNum = this->blockLength;
 
-        pipe.InitBuffer(inQueueX, BUFFER_NUM, this->batch * this->tileLength * sizeof(T));
+        pipe.InitBuffer(inQueueX, BUFFER_NUM, this->batch * this->bs * this->tileLength * sizeof(T));
         pipe.InitBuffer(inQueueX2, BUFFER_NUM, this->batch * this->tileLength * sizeof(T));
     }
     __aicore__ inline void Process()
