@@ -504,7 +504,8 @@ public:
 
         this->tileNum = this->blockLength;
 
-        pipe.InitBuffer(inQueueX, BUFFER_NUM, this->batch * this->bs * this->tileLength * sizeof(T));
+        pipe.InitBuffer(inQueueX, BUFFER_NUM, this->batch * this->tileLength * sizeof(T));
+        pipe.InitBuffer(inQueueX2, BUFFER_NUM, this->batch * this->tileLength * sizeof(T));
     }
     __aicore__ inline void Process()
     {
@@ -552,22 +553,29 @@ public:
         }
 
         for (int32_t i = st2; i < ed2; i+=d) {
+            auto j = this->st + i;
+            auto hy = j & div3;
+            auto w = (j >> div2) & mod2;
+            auto hyw = (hy ^ w) << mul3;
             {
                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
-                DataCopy(xLocal, xGm[i << mul3], length);
+                DataCopy(xLocal, xGm[i << mul3], params);
                 inQueueX.EnQue(xLocal);
             }
             {
                 LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-                auto j = this->st + i;
-                auto hy = j & div3;
-                auto w = (j >> div2) & mod2;
-                auto hyw = (hy ^ w) << mul3;
-                
-                DataCopy(zGm[hyw], xLocal, params);
-                DataCopy(zGm[hyw ^ k3x], xLocal[k3], params);
-                // free output tensor for reuse
+                DataCopy(zGm[hyw], xLocal, length2);
                 inQueueX.FreeTensor(xLocal);
+            }
+            {
+                LocalTensor<T> xLocal2 = inQueueX2.AllocTensor<T>();
+                DataCopy(xLocal2, xGm[(i + 1) << mul3], params);
+                inQueueX2.EnQue(xLocal2);
+            }
+            {
+                LocalTensor<T> xLocal2 = inQueueX2.DeQue<T>();
+                DataCopy(zGm[hyw ^ k3x], xLocal2, length2);
+                inQueueX2.FreeTensor(xLocal2);
             }
         }
 
@@ -596,6 +604,7 @@ public:
 private:
     TPipe pipe;
     TQueBind<TPosition::VECIN, TPosition::VECOUT, BUFFER_NUM> inQueueX;
+    TQueBind<TPosition::VECIN, TPosition::VECOUT, BUFFER_NUM> inQueueX2;
     GlobalTensor<T> xGm;
     GlobalTensor<T> zGm;
     uint32_t blockLength;
