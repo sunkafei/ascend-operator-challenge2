@@ -552,16 +552,23 @@ public:
 //             }
 //         }
 
-        for (int32_t i = 0; i < loopCount; i+=d) {
-            auto j = this->st + i;
+        auto st3 = this->st << mul3;
+        auto ed3 = loopCount << mul3;
+        d <<= mul3;
+        div3 <<= mul3;
+        mod2 <<= mul3;
+        auto add3 = 1 << mul3;
+
+        for (int32_t i = 0; i < ed3; i+=d) {
+            auto j = st3 + i;
             auto hy = j & div3;
             auto w = (j >> div2) & mod2;
-            auto hyw = (hy ^ w) << mul3;
+            auto hyw = hy ^ w;
             {
                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
                 LocalTensor<T> xLocal2 = inQueueX2.AllocTensor<T>();
-                DataCopy(xLocal, xGm[i << mul3], params);
-                DataCopy(xLocal2, xGm[(i + 1) << mul3], params);
+                DataCopy(xLocal, xGm[i], params);
+                DataCopy(xLocal2, xGm[i + add3], params);
                 inQueueX.EnQue(xLocal);
                 inQueueX2.EnQue(xLocal2);
             }
