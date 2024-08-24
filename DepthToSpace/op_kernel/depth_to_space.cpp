@@ -599,6 +599,13 @@ public:
                 DataCopy(zGm[hyw], xLocal, length2);
                 inQueueX.FreeTensor(xLocal);
             }
+        }
+
+        for (int32_t i = 0; i < ed3; i+=d) {
+            auto j = st3 + i;
+            auto hy = j & div3;
+            auto w = (j >> div2) & mod2;
+            auto hyw = hy ^ w;
             {
                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
                 DataCopy(xLocal, xGm[i + add3], params);
