@@ -82,7 +82,8 @@ static ge::graphStatus TilingFunc(gert::TilingContext* context)
     uint32_t core_remain = totalLength - aivNum * core_size;
 
     if(type == 7){
-        if(*context->GetAttrs()->GetInt(0) == 2) type = 8;
+        int32_t NUM = 2;
+        if(*context->GetAttrs()->GetInt(0) == 2) type = 8, NUM = 1;
         tiling_size = ((ub_size) / BLOCK_SIZE / 1) / NUM;
         block_size = tiling_size * ALIGN_NUM;
         block_size = block_size / shape[3] * shape[3];
