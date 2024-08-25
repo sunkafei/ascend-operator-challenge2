@@ -328,7 +328,7 @@ public:
         auto mul3 = this->bit[3] - this->bit[4];
 
         auto st2 = (this->st + d - 1) / d * d - this->st;
-        auto ed2 = (loopCount - st2) / d * d;
+        auto ed2 = (loopCount - st2) / d * d + st2;
 
         for(int32_t i = 0; i < st2; i++) {
             {
@@ -528,32 +528,54 @@ public:
         auto k3 = 1 << mul3;
         auto k3x = 1 << (mul3 + this->bit[2]);
 
-        // auto st2 = (this->st + d - 1) / d * d - this->st;
-        // auto ed2 = (loopCount - st2) / d * d;
+        auto st2 = (this->st + d - 1) / d * d - this->st;
+        auto ed2 = (loopCount - st2) / d * d + st2;
 
-//         if(st2) {
-//             {
-//                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
-//                 DataCopy(xLocal, xGm, this->tileLength * st2);
-//                 inQueueX.EnQue(xLocal);
-//             }
-//             {
-//                 LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-//                 for(int32_t i = 0; i < st2; i++) {
-//                     auto j = this->st + i;
-//                     auto hy = j & div3;
-//                     auto w = (j >> div2) & mod2;
-//                     auto x = (j & mod1) << this->bit[2];
+        if(st2) {
+            DataCopyParams params;
+            params.blockCount = st2 / 2;
+            params.blockLen = this->tileLength / this->ALIGN_NUM;
+            params.srcStride = this->tileLength / this->ALIGN_NUM;
+            params.dstStride = 0;
+            if(GetBlockIdx() & 1){
+                {
+                    LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
+                    DataCopy(xLocal, xGm[1 << mul3], params);
+                    inQueueX.EnQue(xLocal);
+                }
+                {
+                    LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+                    auto j = this->st;
+                    auto hy = j & div3;
+                    auto w = (j >> div2) & mod2;
+                    auto hyw = hy ^ w;
 
-//                     DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[i << mul3], this->tileLength);
-//                 }
-//                 // free output tensor for reuse
-//                 inQueueX.FreeTensor(xLocal);
-//             }
-//         }
+                    DataCopy(zGm[(hyw << mul3) ^ k3x], xLocal, this->tileLength * st2 / 2);
+                    inQueueX.FreeTensor(xLocal);
+                }
+            }else{
+                {
+                    LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
+                    DataCopy(xLocal, xGm, params);
+                    inQueueX.EnQue(xLocal);
+                }
+                {
+                    LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+                    auto j = this->st;
+                    auto hy = j & div3;
+                    auto w = (j >> div2) & mod2;
+                    auto hyw = hy ^ w;
+
+                    DataCopy(zGm[hyw << mul3], xLocal, this->tileLength * st2 / 2);
+                    inQueueX.FreeTensor(xLocal);
+                }
+            }
+            
+        }
 
         auto st3 = this->st << mul3;
-        auto ed3 = loopCount << mul3;
+        auto ed3 = ed2 << mul3;
+        st2 <<= mul3;
         d <<= mul3;
         div3 <<= mul3;
         mod2 <<= mul3;
@@ -584,7 +606,7 @@ public:
 
         
         if(GetBlockIdx() & 1){
-            for (int32_t i = 0; i < ed3; i+=d) {
+            for (int32_t i = st2; i < ed3; i+=d) {
                 auto j = st3 + i;
                 auto hy = j & div3;
                 auto w = (j >> div2) & mod2;
@@ -601,7 +623,7 @@ public:
                 }
             }
         }else{
-            for (int32_t i = 0; i < ed3; i+=d) {
+            for (int32_t i = st2; i < ed3; i+=d) {
                 auto j = st3 + i;
                 auto hy = j & div3;
                 auto w = (j >> div2) & mod2;
@@ -619,26 +641,46 @@ public:
             }
         }
 
-//         if(ed2 < loopCount) {
-//             {
-//                 LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
-//                 DataCopy(xLocal, xGm[ed2 << mul3], this->tileLength * (loopCount - ed2));
-//                 inQueueX.EnQue(xLocal);
-//             }
-//             {
-//                 LocalTensor<T> xLocal = inQueueX.DeQue<T>();
-//                 for(int32_t i = ed2; i < loopCount; i++) {
-//                     auto j = this->st + i;
-//                     auto hy = j & div3;
-//                     auto w = (j >> div2) & mod2;
-//                     auto x = (j & mod1) << this->bit[2];
+        if(ed2 < loopCount) {
+            DataCopyParams params;
+            params.blockCount = (loopCount - ed2 + 1) / 2;
+            params.blockLen = this->tileLength / this->ALIGN_NUM;
+            params.srcStride = this->tileLength / this->ALIGN_NUM;
+            params.dstStride = 0;
+            if(GetBlockIdx() & 1){
+                {
+                    LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
+                    DataCopy(xLocal, xGm[ed3 + add3], params);
+                    inQueueX.EnQue(xLocal);
+                }
+                {
+                    LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+                    auto j = st3 + ed3;
+                    auto hy = j & div3;
+                    auto w = (j >> div2) & mod2;
+                    auto hyw = hy ^ w;
 
-//                     DataCopy(zGm[(hy ^ x ^ w) << mul3], xLocal[(i - ed2) << mul3], this->tileLength);
-//                 }
-//                 // free output tensor for reuse
-//                 inQueueX.FreeTensor(xLocal);
-//             }
-//         }
+                    DataCopy(zGm[hyw ^ k3x], xLocal, this->tileLength * params.blockCount);
+                    inQueueX.FreeTensor(xLocal);
+                }
+            }else{
+                {
+                    LocalTensor<T> xLocal = inQueueX.AllocTensor<T>();
+                    DataCopy(xLocal, xGm[ed3], params);
+                    inQueueX.EnQue(xLocal);
+                }
+                {
+                    LocalTensor<T> xLocal = inQueueX.DeQue<T>();
+                    auto j = st3 + ed3;
+                    auto hy = j & div3;
+                    auto w = (j >> div2) & mod2;
+                    auto hyw = hy ^ w;
+
+                    DataCopy(zGm[hyw], xLocal, this->tileLength * params.blockCount);
+                    inQueueX.FreeTensor(xLocal);
+                }
+            }
+        }
     }
 
 private:
