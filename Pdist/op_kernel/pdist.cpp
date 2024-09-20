@@ -145,7 +145,9 @@ extern "C" __global__ __aicore__ void pdist(GM_ADDR x, GM_ADDR y, GM_ADDR worksp
     GET_TILING_DATA(tiling_data, tiling);
     // TODO: user kernel impl
     
-    KernelPdist <DTYPE_X> op;
-    op.Init(x, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.p, tiling_data.shape);
-    op.Process();
+    for(int i = 0; i < 2; i++){
+        KernelPdist <DTYPE_X> op;
+        op.Init(x, y, tiling_data.totalLength, tiling_data.ALIGN_NUM, tiling_data.block_size, tiling_data.core_size, tiling_data.core_remain, tiling_data.p, tiling_data.shape);
+        op.Process();
+    }
 }
